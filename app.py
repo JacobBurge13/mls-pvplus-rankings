@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import base64
 from dataclasses import dataclass
 from pathlib import Path
 
@@ -29,6 +30,39 @@ BLUE = "#5d86c9"
 GREEN = "#76d37c"
 RED = "#ef6b6b"
 GREY = "#b8bec9"
+
+TEAM_LOGO_IDS = {
+    "Atlanta United": "26666",
+    "Austin FC": "29664",
+    "Charlotte FC": "30105",
+    "Chicago": "1118",
+    "Colorado": "1120",
+    "Columbus": "1113",
+    "DC United": "1119",
+    "FC Cincinnati": "24949",
+    "FC Dallas": "2948",
+    "Houston": "3624",
+    "Inter Miami CF": "28925",
+    "Kansas City": "1116",
+    "L.A. Galaxy": "1117",
+    "Los Angeles FC": "27482",
+    "Minnesota United": "9293",
+    "Montreal": "11135",
+    "Nashville SC": "27497",
+    "New England": "1114",
+    "New York": "1121",
+    "New York City FC": "19584",
+    "Orlando City": "10221",
+    "Philadelphia": "8586",
+    "Portland": "11133",
+    "Salt Lake": "2947",
+    "San Diego FC": "32064",
+    "San Jose": "1122",
+    "Seattle": "5973",
+    "St. Louis City": "30664",
+    "Toronto": "4186",
+    "Vancouver": "11134",
+}
 
 
 @dataclass(frozen=True)
@@ -608,6 +642,24 @@ def chart_layout(fig: go.Figure) -> go.Figure:
     return fig
 
 
+@st.cache_data(show_spinner=False)
+def team_logo_data_uri(team_name: str) -> str | None:
+    logo_id = TEAM_LOGO_IDS.get(team_name)
+    if not logo_id:
+        return None
+    logo_path = Path(__file__).resolve().parent / "assets" / "mls_logos" / f"{logo_id}_image.png"
+    if not logo_path.exists():
+        return None
+    encoded = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
+    return f"data:image/png;base64,{encoded}"
+
+
+def add_team_logo_column(df: pd.DataFrame, team_col: str = "team_name") -> pd.DataFrame:
+    enriched_df = df.copy()
+    enriched_df["team_logo"] = enriched_df[team_col].apply(team_logo_data_uri)
+    return enriched_df
+
+
 def set_selected_player(player_id: str | None) -> None:
     if player_id:
         st.query_params["player_id"] = str(player_id)
@@ -836,6 +888,9 @@ if selected_player_id:
 
     render_player_detail_screen(selected_player_df.iloc[0], df, player_match_df)
 else:
+    df = add_team_logo_column(df)
+    team_df = add_team_logo_column(team_df)
+    team_against_df = add_team_logo_column(team_against_df)
     player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
 
     with player_tab:
@@ -886,7 +941,7 @@ else:
                 "rank",
                 "player_name",
                 "player_age",
-                "team_name",
+                "team_logo",
                 "position_group",
                 "matches",
                 "pv_total",
@@ -901,7 +956,7 @@ else:
                 "rank": "Rank",
                 "player_name": "Player",
                 "player_age": "Age",
-                "team_name": "Team",
+                "team_logo": "Team",
                 "position_group": "Position",
                 "matches": "Matches",
                 "pv_total": "PV+",
@@ -922,6 +977,7 @@ else:
             selection_mode="single-row",
             column_config={
                 "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
                 "Age": st.column_config.NumberColumn("Age", format="%d"),
                 "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                 "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
@@ -959,7 +1015,7 @@ else:
             team_display_df = filtered_team_df[
                 [
                     "rank",
-                    "team_name",
+                    "team_logo",
                     "matches",
                     "pv_total",
                     "pv_passing",
@@ -971,7 +1027,7 @@ else:
             ].rename(
                 columns={
                     "rank": "Rank",
-                    "team_name": "Team",
+                    "team_logo": "Team",
                     "matches": "Matches",
                     "pv_total": "PV+",
                     "pv_passing": "Passing",
@@ -989,6 +1045,7 @@ else:
                 height=780,
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                    "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
                     "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                     "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
                     "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
@@ -1015,7 +1072,7 @@ else:
             against_display_df = against_df[
                 [
                     "rank",
-                    "team_name",
+                    "team_logo",
                     "matches",
                     "pv_total",
                     "pv_passing",
@@ -1027,7 +1084,7 @@ else:
             ].rename(
                 columns={
                     "rank": "Rank",
-                    "team_name": "Team",
+                    "team_logo": "Team",
                     "matches": "Matches",
                     "pv_total": "PV+ Against",
                     "pv_passing": "Passing Against",
@@ -1045,6 +1102,7 @@ else:
                 height=780,
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                    "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
                     "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                     "PV+ Against": st.column_config.NumberColumn("PV+ Against", format="%.2f"),
                     "Passing Against": st.column_config.NumberColumn("Passing Against", format="%.2f"),
