@@ -656,7 +656,7 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
             marker_line_width=2,
             opacity=0.95,
             text=[str(v) for v in display_values],
-            textposition="outside",
+            textposition="inside",
             textfont=dict(color=TEXT, size=16),
             hovertemplate="%{theta}<br>Percentile: %{r:.0f}<extra></extra>",
         )
