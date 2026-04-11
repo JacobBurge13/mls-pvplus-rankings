@@ -4,6 +4,8 @@ import os
 from dataclasses import dataclass
 from pathlib import Path
 
+import matplotlib.pyplot as plt
+import numpy as np
 import pandas as pd
 import plotly.graph_objects as go
 import psycopg2
@@ -622,7 +624,7 @@ def get_selected_player_id() -> str | None:
     return str(player_id)
 
 
-def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFrame) -> go.Figure:
+def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFrame):
     categories = [
         ("Passing", "pv_passing"),
         ("Receiving", "pv_receiving"),
@@ -631,74 +633,95 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
         ("Defending", "pv_defending"),
     ]
 
-    theta = []
+    labels = []
     values = []
-    colors = []
-    palette = ["#8BE28A", "#79CC76", "#6DBB69", "#7AC56E", "#9AE892"]
+    palette = ["#86DF81", "#79CD74", "#73C16E", "#80CE79", "#9AF090"]
 
-    for idx, (label, col) in enumerate(categories):
+    for label, col in categories:
         series = pd.to_numeric(population_df[col], errors="coerce").fillna(0)
         percentile = float((series <= float(selected_player_row[col])).mean() * 100)
-        theta.append(idx * 72)
+        labels.append(label)
         values.append(max(percentile, 1))
-        colors.append(palette[idx % len(palette)])
 
-    fig = go.Figure()
-    fig.add_trace(
-        go.Barpolar(
-            r=values,
-            theta=theta,
-            width=56,
-            marker=dict(
-                color=colors,
-                line=dict(color="rgba(255,255,255,0.92)", width=2.5),
+    values = np.array(values)
+    count = len(labels)
+    angles = np.linspace(0, 2 * np.pi, count, endpoint=False)
+    width = (2 * np.pi / count) * 0.995
+
+    fig = plt.figure(figsize=(7.2, 7.8), facecolor=PANEL)
+    ax = plt.subplot(111, polar=True, facecolor=PANEL)
+    ax.set_theta_offset(np.pi / 2)
+    ax.set_theta_direction(-1)
+    ax.set_ylim(0, 100)
+
+    bars = ax.bar(
+        angles,
+        values,
+        width=width,
+        bottom=0,
+        color=palette,
+        edgecolor="#ECEFF4",
+        linewidth=1.8,
+        alpha=0.96,
+        align="center",
+        zorder=3,
+    )
+
+    for bar in bars:
+        bar.set_joinstyle("miter")
+
+    ax.set_yticks([20, 40, 60, 80, 100])
+    ax.set_yticklabels([])
+    ax.yaxis.grid(True, color=(1, 1, 1, 0.38), linestyle="--", linewidth=1.0)
+    ax.xaxis.grid(True, color=(1, 1, 1, 0.12), linestyle="-", linewidth=0.9)
+    ax.spines["polar"].set_visible(False)
+
+    ax.set_xticks(angles)
+    ax.set_xticklabels(labels, color=TEXT, fontsize=15)
+
+    centre = plt.Circle((0, 0), 12, transform=ax.transData._b, color=BG, zorder=5)
+    ax.add_artist(centre)
+    outline = plt.Circle((0, 0), 12, transform=ax.transData._b, fill=False, color="#ECEFF4", linewidth=1.5, zorder=6)
+    ax.add_artist(outline)
+
+    for angle, value in zip(angles, values):
+        ax.text(
+            angle,
+            min(value + 7, 102),
+            f"{int(round(value))}",
+            ha="center",
+            va="center",
+            color=TEXT,
+            fontsize=13,
+            fontweight="bold",
+            bbox=dict(
+                boxstyle="round,pad=0.35",
+                facecolor="#181C24",
+                edgecolor="#ECEFF4",
+                linewidth=1.5,
             ),
-            opacity=0.95,
-            hovertemplate="%{theta}<br>Percentile: %{r:.0f}<extra></extra>",
+            zorder=7,
         )
+
+    fig.text(
+        0.08,
+        0.95,
+        selected_player_row["player_name"],
+        color=TEXT,
+        fontsize=26,
+        fontweight="bold",
+        ha="left",
     )
-    fig.update_layout(
-        paper_bgcolor=PANEL,
-        plot_bgcolor=PANEL,
-        font=dict(color=TEXT),
-        title=dict(
-            text=(
-                f"{selected_player_row['player_name']}"
-                f"<br><sup>{selected_player_row['team_name']} | "
-                f"{selected_player_row['position_group']} | MLS 2026</sup>"
-            ),
-            x=0.03,
-            xanchor="left",
-            y=0.98,
-            yanchor="top",
-            font=dict(size=22, color=TEXT),
-        ),
-        polar=dict(
-            bgcolor=PANEL,
-            radialaxis=dict(
-                visible=True,
-                range=[0, 100],
-                showticklabels=False,
-                ticks="",
-                gridcolor="rgba(255,255,255,0.28)",
-                gridwidth=1.4,
-                angle=90,
-            ),
-            angularaxis=dict(
-                tickfont=dict(color=TEXT, size=14),
-                tickmode="array",
-                tickvals=[idx * 72 for idx in range(len(categories))],
-                ticktext=[label for label, _ in categories],
-                linecolor="rgba(255,255,255,0.18)",
-                gridcolor="rgba(255,255,255,0.18)",
-                rotation=90,
-                direction="clockwise",
-            ),
-            hole=0.10,
-        ),
-        margin=dict(l=30, r=30, t=110, b=30),
-        showlegend=False,
+    fig.text(
+        0.08,
+        0.905,
+        f"{selected_player_row['team_name']} | {selected_player_row['position_group']} | MLS 2026",
+        color=TEXT,
+        fontsize=16,
+        fontweight="bold",
+        ha="left",
     )
+
     return fig
 
 
@@ -759,9 +782,10 @@ def render_player_detail_screen(
 
     detail_cols = st.columns([1.05, 1.25], vertical_alignment="top")
     with detail_cols[0]:
-        st.plotly_chart(
+        st.pyplot(
             player_pizza_chart(selected_player_row, population_df),
             use_container_width=True,
+            clear_figure=True,
         )
     with detail_cols[1]:
         st.plotly_chart(
