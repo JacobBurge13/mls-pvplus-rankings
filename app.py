@@ -121,15 +121,16 @@ def inject_styles() -> None:
             font-size: 0.9rem;
             margin-top: 0.9rem;
         }}
-        .title-row {{
+        .header-crest {{
             display: flex;
-            align-items: center;
-            gap: 1rem;
-            margin-bottom: 0.35rem;
+            justify-content: flex-end;
+            align-items: flex-start;
+            width: 100%;
+            padding-top: 0.25rem;
         }}
-        .title-logo img {{
-            width: 48px;
-            max-width: 48px;
+        .header-crest img {{
+            display: block;
+            margin-left: auto;
             filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
         }}
         div[data-baseweb="select"] > div,
@@ -157,12 +158,8 @@ def inject_styles() -> None:
                 line-height: 1.4;
                 margin-bottom: 1rem;
             }}
-            .title-row {{
-                gap: 0.7rem;
-            }}
-            .title-logo img {{
-                width: 38px;
-                max-width: 38px;
+            .header-crest {{
+                padding-top: 0.1rem;
             }}
             h1 {{
                 font-size: 2rem !important;
@@ -316,17 +313,19 @@ def load_player_data() -> pd.DataFrame:
 inject_styles()
 
 logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
-st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
-title_cols = st.columns([0.84, 0.16], vertical_alignment="center")
+title_cols = st.columns([0.9, 0.1], vertical_alignment="top")
 with title_cols[0]:
+    st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
     st.title("PV+ PLAYER RANKINGS")
+    st.markdown(
+        '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
+        unsafe_allow_html=True,
+    )
 with title_cols[1]:
     if logo_path.exists():
-        st.image(str(logo_path), width=34)
-st.markdown(
-    '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
-    unsafe_allow_html=True,
-)
+        st.markdown('<div class="header-crest">', unsafe_allow_html=True)
+        st.image(str(logo_path), width=72)
+        st.markdown("</div>", unsafe_allow_html=True)
 
 try:
     df = load_player_data()
