@@ -5,7 +5,6 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
-import plotly.express as px
 import plotly.graph_objects as go
 import psycopg2
 import streamlit as st
@@ -607,6 +606,171 @@ def chart_layout(fig: go.Figure) -> go.Figure:
     return fig
 
 
+def set_selected_player(player_id: str | None) -> None:
+    if player_id:
+        st.query_params["player_id"] = str(player_id)
+    else:
+        st.query_params.clear()
+
+
+def get_selected_player_id() -> str | None:
+    player_id = st.query_params.get("player_id")
+    if player_id is None:
+        return None
+    if isinstance(player_id, list):
+        return player_id[0] if player_id else None
+    return str(player_id)
+
+
+def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFrame) -> go.Figure:
+    categories = [
+        ("Passing", "pv_passing"),
+        ("Receiving", "pv_receiving"),
+        ("Carrying", "pv_carrying"),
+        ("Shooting", "pv_shooting"),
+        ("Defending", "pv_defending"),
+    ]
+
+    theta = []
+    values = []
+    display_values = []
+    colors = []
+    palette = ["#8BE28A", "#79CC76", "#6DBB69", "#7AC56E", "#9AE892"]
+
+    for idx, (label, col) in enumerate(categories):
+        series = pd.to_numeric(population_df[col], errors="coerce").fillna(0)
+        percentile = float((series <= float(selected_player_row[col])).mean() * 100)
+        theta.append(label)
+        values.append(max(percentile, 1))
+        display_values.append(int(round(percentile)))
+        colors.append(palette[idx % len(palette)])
+
+    fig = go.Figure()
+    fig.add_trace(
+        go.Barpolar(
+            r=values,
+            theta=theta,
+            width=[66] * len(theta),
+            marker_color=colors,
+            marker_line_color="rgba(255,255,255,0.8)",
+            marker_line_width=2,
+            opacity=0.95,
+            text=[str(v) for v in display_values],
+            textposition="outside",
+            textfont=dict(color=TEXT, size=16),
+            hovertemplate="%{theta}<br>Percentile: %{r:.0f}<extra></extra>",
+        )
+    )
+    fig.update_layout(
+        paper_bgcolor=PANEL,
+        plot_bgcolor=PANEL,
+        font=dict(color=TEXT),
+        title=dict(
+            text=(
+                f"{selected_player_row['player_name']}"
+                f"<br><sup>{selected_player_row['team_name']} | "
+                f"{selected_player_row['position_group']} | MLS 2026</sup>"
+            ),
+            x=0.03,
+            xanchor="left",
+            y=0.98,
+            yanchor="top",
+            font=dict(size=22, color=TEXT),
+        ),
+        polar=dict(
+            bgcolor=PANEL,
+            radialaxis=dict(
+                visible=True,
+                range=[0, 100],
+                showticklabels=False,
+                ticks="",
+                gridcolor="rgba(255,255,255,0.28)",
+                gridwidth=1.4,
+                angle=90,
+            ),
+            angularaxis=dict(
+                tickfont=dict(color=TEXT, size=14),
+                linecolor="rgba(255,255,255,0.15)",
+                gridcolor="rgba(255,255,255,0.12)",
+                rotation=90,
+                direction="clockwise",
+            ),
+            hole=0.12,
+        ),
+        margin=dict(l=30, r=30, t=110, b=30),
+        showlegend=False,
+    )
+    return fig
+
+
+def player_trend_chart(trend_df: pd.DataFrame, player_name: str) -> go.Figure:
+    fig = go.Figure()
+    fig.add_trace(
+        go.Scatter(
+            x=trend_df["match_date"],
+            y=trend_df["pv_total"],
+            mode="lines+markers",
+            line=dict(color=GOLD, width=4),
+            marker=dict(size=10, color=TEXT, line=dict(color=GOLD, width=2)),
+            hovertext=trend_df["match_label"],
+            hovertemplate="%{hovertext}<br>PV+: %{y:.2f}<extra></extra>",
+            name="PV+",
+        )
+    )
+    fig.update_layout(title=f"{player_name} | PV+ Over the Season")
+    return chart_layout(fig)
+
+
+def render_player_detail_screen(
+    selected_player_row: pd.Series,
+    population_df: pd.DataFrame,
+    player_match_df: pd.DataFrame,
+) -> None:
+    top_cols = st.columns([0.16, 0.84], vertical_alignment="center")
+    with top_cols[0]:
+        if st.button("Back to rankings", use_container_width=True):
+            set_selected_player(None)
+            st.rerun()
+    with top_cols[1]:
+        st.markdown(
+            f"""
+            <div class="pv-kicker">Player Detail</div>
+            <div style="font-size:2.35rem;font-weight:900;color:{TEXT};line-height:1.05;">
+                {selected_player_row['player_name']}
+            </div>
+            <div class="pv-subtitle" style="margin-top:0.45rem;">
+                {selected_player_row['team_name']} | {selected_player_row['position_group']} | Age {int(selected_player_row['player_age'])}
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+    metric_cols = st.columns(4)
+    metric_cols[0].metric("Rank", f"#{int(selected_player_row['rank'])}")
+    metric_cols[1].metric("Matches", f"{int(selected_player_row['matches'])}")
+    metric_cols[2].metric("Minutes", f"{int(selected_player_row['minutes_played'])}")
+    metric_cols[3].metric("Total PV+", f"{float(selected_player_row['pv_total']):.2f}")
+
+    trend_df = player_match_df[player_match_df["player_id"] == selected_player_row["player_id"]].copy()
+    trend_df = trend_df.sort_values(["match_date", "match_id"]).reset_index(drop=True)
+    trend_df["match_label"] = trend_df.apply(
+        lambda r: f"{r['match_date'].date()} | {r['home_team_name']} vs {r['away_team_name']}",
+        axis=1,
+    )
+
+    detail_cols = st.columns([1.05, 1.25], vertical_alignment="top")
+    with detail_cols[0]:
+        st.plotly_chart(
+            player_pizza_chart(selected_player_row, population_df),
+            use_container_width=True,
+        )
+    with detail_cols[1]:
+        st.plotly_chart(
+            player_trend_chart(trend_df, selected_player_row["player_name"]),
+            use_container_width=True,
+        )
+
+
 inject_styles()
 
 logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
@@ -633,198 +797,72 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 
-player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
+selected_player_id = get_selected_player_id()
 
-with player_tab:
-    team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
-    position_options = ["All Positions", "GK", "DEF", "MID", "FWD"]
+if selected_player_id:
+    ranked_df = df.sort_values("pv_total", ascending=False).reset_index(drop=True).copy()
+    ranked_df["rank"] = range(1, len(ranked_df) + 1)
+    selected_player_df = ranked_df[ranked_df["player_id"].astype(str) == str(selected_player_id)].copy()
 
-    with st.container():
-        filter_cols = st.columns([1.0, 1.0, 0.8, 0.9, 0.75])
+    if selected_player_df.empty:
+        st.warning("That player detail view is no longer available. Returning to rankings.")
+        set_selected_player(None)
+        st.rerun()
 
-        with filter_cols[0]:
-            team_filter = st.selectbox("Team", options=team_options, key="player_team_filter")
-        with filter_cols[1]:
-            player_filter = st.text_input("Player name", placeholder="Search player...", key="player_name_filter")
-        with filter_cols[2]:
-            max_age = st.number_input("Max age", min_value=0, value=99, step=1, key="player_age_filter")
-        with filter_cols[3]:
-            position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
-        with filter_cols[4]:
-            min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45, key="player_minutes_filter")
+    render_player_detail_screen(selected_player_df.iloc[0], df, player_match_df)
+else:
+    player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
 
-    filtered_df = df.copy()
-    if team_filter != "All Teams":
-        filtered_df = filtered_df[filtered_df["team_name"] == team_filter]
-    if player_filter:
+    with player_tab:
+        team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
+        position_options = ["All Positions", "GK", "DEF", "MID", "FWD"]
+
+        with st.container():
+            filter_cols = st.columns([1.0, 1.0, 0.8, 0.9, 0.75])
+
+            with filter_cols[0]:
+                team_filter = st.selectbox("Team", options=team_options, key="player_team_filter")
+            with filter_cols[1]:
+                player_filter = st.text_input("Player name", placeholder="Search player...", key="player_name_filter")
+            with filter_cols[2]:
+                max_age = st.number_input("Max age", min_value=0, value=99, step=1, key="player_age_filter")
+            with filter_cols[3]:
+                position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
+            with filter_cols[4]:
+                min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45, key="player_minutes_filter")
+
+        filtered_df = df.copy()
+        if team_filter != "All Teams":
+            filtered_df = filtered_df[filtered_df["team_name"] == team_filter]
+        if player_filter:
+            filtered_df = filtered_df[
+                filtered_df["player_name"].str.contains(player_filter, case=False, na=False)
+            ]
         filtered_df = filtered_df[
-            filtered_df["player_name"].str.contains(player_filter, case=False, na=False)
+            filtered_df["player_age"].fillna(999) <= max_age
         ]
-    filtered_df = filtered_df[
-        filtered_df["player_age"].fillna(999) <= max_age
-    ]
-    if position_filter != "All Positions":
-        filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
-    filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
-    filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
-    filtered_df["rank"] = range(1, len(filtered_df) + 1)
-
-    st.markdown(
-        f"""
-        <div class="filter-note">
-            Showing <strong>{len(filtered_df):,}</strong> players from the 2026 season. Click a player row to load the charts below.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    display_df = filtered_df[
-        [
-            "rank",
-            "player_name",
-            "player_age",
-            "team_name",
-            "position_group",
-            "matches",
-            "pv_total",
-            "pv_passing",
-            "pv_receiving",
-            "pv_carrying",
-            "pv_shooting",
-            "pv_defending",
-        ]
-    ].rename(
-        columns={
-            "rank": "Rank",
-            "player_name": "Player",
-            "player_age": "Age",
-            "team_name": "Team",
-            "position_group": "Position",
-            "matches": "Matches",
-            "pv_total": "PV+",
-            "pv_passing": "Passing",
-            "pv_receiving": "Receiving",
-            "pv_carrying": "Carrying",
-            "pv_shooting": "Shooting",
-            "pv_defending": "Defending",
-        }
-    )
-
-    player_table_event = st.dataframe(
-        display_df,
-        use_container_width=True,
-        hide_index=True,
-        height=780,
-        on_select="rerun",
-        selection_mode="single-row",
-        column_config={
-            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-            "Age": st.column_config.NumberColumn("Age", format="%d"),
-            "Matches": st.column_config.NumberColumn("Matches", format="%d"),
-            "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
-            "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
-            "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
-            "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
-            "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
-            "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
-        },
-    )
-
-    selected_rows = player_table_event.selection.rows if player_table_event else []
-    if selected_rows:
-        selected_row_index = selected_rows[0]
-        player_row = filtered_df.iloc[selected_row_index]
-        selected_player_id = player_row["player_id"]
-        selected_player = player_row["player_name"]
-        pie_df = pd.DataFrame(
-            {
-                "Category": ["Passing", "Receiving", "Carrying", "Shooting", "Defending"],
-                "Value": [
-                    player_row["pv_passing"],
-                    player_row["pv_receiving"],
-                    player_row["pv_carrying"],
-                    player_row["pv_shooting"],
-                    player_row["pv_defending"],
-                ],
-            }
-        )
-        pie_colors = [BLUE, GREEN, GOLD, RED, GREY]
-
-        trend_df = player_match_df[player_match_df["player_id"] == selected_player_id].copy()
-        trend_df = trend_df.sort_values(["match_date", "match_id"]).reset_index(drop=True)
-        trend_df["match_label"] = trend_df.apply(
-            lambda r: f"{r['match_date'].date()} | {r['home_team_name']} vs {r['away_team_name']}",
-            axis=1,
-        )
-
-        detail_cols = st.columns(2)
-        with detail_cols[0]:
-            pie_fig = px.pie(
-                pie_df,
-                values="Value",
-                names="Category",
-                hole=0.45,
-                color="Category",
-                color_discrete_sequence=pie_colors,
-            )
-            pie_fig.update_traces(textinfo="percent+label", textfont_color=TEXT, marker=dict(line=dict(color=PANEL, width=2)))
-            pie_fig.update_layout(
-                paper_bgcolor=PANEL,
-                plot_bgcolor=PANEL,
-                font=dict(color=TEXT),
-                title=f"{selected_player} | PV+ Breakdown",
-                margin=dict(l=20, r=20, t=60, b=20),
-                legend=dict(font=dict(color=TEXT)),
-            )
-            st.plotly_chart(pie_fig, use_container_width=True)
-
-        with detail_cols[1]:
-            line_fig = go.Figure()
-            line_fig.add_trace(
-                go.Scatter(
-                    x=trend_df["match_date"],
-                    y=trend_df["pv_total"],
-                    mode="lines+markers",
-                    line=dict(color=GOLD, width=3),
-                    marker=dict(size=8, color=TEXT, line=dict(color=GOLD, width=2)),
-                    hovertext=trend_df["match_label"],
-                    hovertemplate="%{hovertext}<br>PV+: %{y:.2f}<extra></extra>",
-                    name="PV+",
-                )
-            )
-            line_fig.update_layout(title=f"{selected_player} | PV+ Over Season")
-            chart_layout(line_fig)
-            st.plotly_chart(line_fig, use_container_width=True)
-    else:
-        st.markdown(
-            """
-            <div class="filter-note">
-                Select a player row in the table above to see the PV+ breakdown and match-by-match trend.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
-
-with team_tab:
-    teams_for_tab, teams_against_tab = st.tabs(["For", "Against"])
-
-    with teams_for_tab:
-        filtered_team_df = team_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
-        filtered_team_df["rank"] = range(1, len(filtered_team_df) + 1)
+        if position_filter != "All Positions":
+            filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
+        filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
+        filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
+        filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
         st.markdown(
             f"""
             <div class="filter-note">
-                Showing <strong>{len(filtered_team_df):,}</strong> teams from the 2026 season.
+                Showing <strong>{len(filtered_df):,}</strong> players from the 2026 season. Click a player row to open their detail screen.
             </div>
             """,
             unsafe_allow_html=True,
         )
 
-        team_display_df = filtered_team_df[
+        display_df = filtered_df[
             [
                 "rank",
+                "player_name",
+                "player_age",
                 "team_name",
+                "position_group",
                 "matches",
                 "pv_total",
                 "pv_passing",
@@ -836,7 +874,10 @@ with team_tab:
         ].rename(
             columns={
                 "rank": "Rank",
+                "player_name": "Player",
+                "player_age": "Age",
                 "team_name": "Team",
+                "position_group": "Position",
                 "matches": "Matches",
                 "pv_total": "PV+",
                 "pv_passing": "Passing",
@@ -847,13 +888,16 @@ with team_tab:
             }
         )
 
-        st.dataframe(
-            team_display_df,
+        player_table_event = st.dataframe(
+            display_df,
             use_container_width=True,
             hide_index=True,
             height=780,
+            on_select="rerun",
+            selection_mode="single-row",
             column_config={
                 "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                "Age": st.column_config.NumberColumn("Age", format="%d"),
                 "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                 "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
                 "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
@@ -864,58 +908,124 @@ with team_tab:
             },
         )
 
-    with teams_against_tab:
-        against_df = team_against_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
-        against_df["rank"] = range(1, len(against_df) + 1)
+        selected_rows = player_table_event.selection.rows if player_table_event else []
+        if selected_rows:
+            selected_row_index = selected_rows[0]
+            player_row = filtered_df.iloc[selected_row_index]
+            set_selected_player(player_row["player_id"])
+            st.rerun()
 
-        st.markdown(
-            f"""
-            <div class="filter-note">
-                Showing PV+ earned <strong>against</strong> each team in the 2026 season.
-            </div>
-            """,
-            unsafe_allow_html=True,
-        )
+    with team_tab:
+        teams_for_tab, teams_against_tab = st.tabs(["For", "Against"])
 
-        against_display_df = against_df[
-            [
-                "rank",
-                "team_name",
-                "matches",
-                "pv_total",
-                "pv_passing",
-                "pv_receiving",
-                "pv_carrying",
-                "pv_shooting",
-                "pv_defending",
-            ]
-        ].rename(
-            columns={
-                "rank": "Rank",
-                "team_name": "Team",
-                "matches": "Matches",
-                "pv_total": "PV+ Against",
-                "pv_passing": "Passing Against",
-                "pv_receiving": "Receiving Against",
-                "pv_carrying": "Carrying Against",
-                "pv_shooting": "Shooting Against",
-                "pv_defending": "Defending Against",
-            }
-        )
+        with teams_for_tab:
+            filtered_team_df = team_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
+            filtered_team_df["rank"] = range(1, len(filtered_team_df) + 1)
 
-        st.dataframe(
-            against_display_df,
-            use_container_width=True,
-            hide_index=True,
-            height=780,
-            column_config={
-                "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-                "Matches": st.column_config.NumberColumn("Matches", format="%d"),
-                "PV+ Against": st.column_config.NumberColumn("PV+ Against", format="%.2f"),
-                "Passing Against": st.column_config.NumberColumn("Passing Against", format="%.2f"),
-                "Receiving Against": st.column_config.NumberColumn("Receiving Against", format="%.2f"),
-                "Carrying Against": st.column_config.NumberColumn("Carrying Against", format="%.2f"),
-                "Shooting Against": st.column_config.NumberColumn("Shooting Against", format="%.2f"),
-                "Defending Against": st.column_config.NumberColumn("Defending Against", format="%.2f"),
-            },
-        )
+            st.markdown(
+                f"""
+                <div class="filter-note">
+                    Showing <strong>{len(filtered_team_df):,}</strong> teams from the 2026 season.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            team_display_df = filtered_team_df[
+                [
+                    "rank",
+                    "team_name",
+                    "matches",
+                    "pv_total",
+                    "pv_passing",
+                    "pv_receiving",
+                    "pv_carrying",
+                    "pv_shooting",
+                    "pv_defending",
+                ]
+            ].rename(
+                columns={
+                    "rank": "Rank",
+                    "team_name": "Team",
+                    "matches": "Matches",
+                    "pv_total": "PV+",
+                    "pv_passing": "Passing",
+                    "pv_receiving": "Receiving",
+                    "pv_carrying": "Carrying",
+                    "pv_shooting": "Shooting",
+                    "pv_defending": "Defending",
+                }
+            )
+
+            st.dataframe(
+                team_display_df,
+                use_container_width=True,
+                hide_index=True,
+                height=780,
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                    "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+                    "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
+                    "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
+                    "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
+                    "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
+                    "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
+                    "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
+                },
+            )
+
+        with teams_against_tab:
+            against_df = team_against_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
+            against_df["rank"] = range(1, len(against_df) + 1)
+
+            st.markdown(
+                f"""
+                <div class="filter-note">
+                    Showing PV+ earned <strong>against</strong> each team in the 2026 season.
+                </div>
+                """,
+                unsafe_allow_html=True,
+            )
+
+            against_display_df = against_df[
+                [
+                    "rank",
+                    "team_name",
+                    "matches",
+                    "pv_total",
+                    "pv_passing",
+                    "pv_receiving",
+                    "pv_carrying",
+                    "pv_shooting",
+                    "pv_defending",
+                ]
+            ].rename(
+                columns={
+                    "rank": "Rank",
+                    "team_name": "Team",
+                    "matches": "Matches",
+                    "pv_total": "PV+ Against",
+                    "pv_passing": "Passing Against",
+                    "pv_receiving": "Receiving Against",
+                    "pv_carrying": "Carrying Against",
+                    "pv_shooting": "Shooting Against",
+                    "pv_defending": "Defending Against",
+                }
+            )
+
+            st.dataframe(
+                against_display_df,
+                use_container_width=True,
+                hide_index=True,
+                height=780,
+                column_config={
+                    "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                    "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+                    "PV+ Against": st.column_config.NumberColumn("PV+ Against", format="%.2f"),
+                    "Passing Against": st.column_config.NumberColumn("Passing Against", format="%.2f"),
+                    "Receiving Against": st.column_config.NumberColumn("Receiving Against", format="%.2f"),
+                    "Carrying Against": st.column_config.NumberColumn("Carrying Against", format="%.2f"),
+                    "Shooting Against": st.column_config.NumberColumn("Shooting Against", format="%.2f"),
+                    "Defending Against": st.column_config.NumberColumn("Defending Against", format="%.2f"),
+                },
+            )
