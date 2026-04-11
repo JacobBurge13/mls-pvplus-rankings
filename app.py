@@ -633,16 +633,14 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
 
     theta = []
     values = []
-    display_values = []
     colors = []
     palette = ["#8BE28A", "#79CC76", "#6DBB69", "#7AC56E", "#9AE892"]
 
     for idx, (label, col) in enumerate(categories):
         series = pd.to_numeric(population_df[col], errors="coerce").fillna(0)
         percentile = float((series <= float(selected_player_row[col])).mean() * 100)
-        theta.append(label)
+        theta.append(idx * 72)
         values.append(max(percentile, 1))
-        display_values.append(int(round(percentile)))
         colors.append(palette[idx % len(palette)])
 
     fig = go.Figure()
@@ -688,6 +686,9 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
             ),
             angularaxis=dict(
                 tickfont=dict(color=TEXT, size=14),
+                tickmode="array",
+                tickvals=[idx * 72 for idx in range(len(categories))],
+                ticktext=[label for label, _ in categories],
                 linecolor="rgba(255,255,255,0.15)",
                 gridcolor="rgba(255,255,255,0.12)",
                 rotation=90,
