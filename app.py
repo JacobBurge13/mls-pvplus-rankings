@@ -128,8 +128,8 @@ def inject_styles() -> None:
             margin-bottom: 0.35rem;
         }}
         .title-logo img {{
-            width: 96px;
-            max-width: 96px;
+            width: 72px;
+            max-width: 72px;
             filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
         }}
         div[data-baseweb="select"] > div,
@@ -161,8 +161,8 @@ def inject_styles() -> None:
                 gap: 0.7rem;
             }}
             .title-logo img {{
-                width: 64px;
-                max-width: 64px;
+                width: 52px;
+                max-width: 52px;
             }}
             h1 {{
                 font-size: 2rem !important;
