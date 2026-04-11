@@ -90,8 +90,10 @@ def inject_styles() -> None:
             color: {TEXT};
         }}
         .block-container {{
-            padding-top: 2rem;
+            padding-top: 5.5rem;
             padding-bottom: 2rem;
+            padding-left: 1rem;
+            padding-right: 1rem;
         }}
         [data-testid="stSidebar"] {{
             background: linear-gradient(180deg, rgba(19,25,35,0.98), rgba(11,16,24,0.98));
@@ -127,6 +129,29 @@ def inject_styles() -> None:
             border-radius: 18px;
             overflow: hidden;
             border: 1px solid rgba(255,255,255,0.08);
+        }}
+        @media (max-width: 900px) {{
+            .block-container {{
+                padding-top: 6.25rem;
+                padding-left: 0.8rem;
+                padding-right: 0.8rem;
+            }}
+            .pv-kicker {{
+                font-size: 0.68rem;
+                letter-spacing: 0.12em;
+            }}
+            .pv-subtitle {{
+                font-size: 0.82rem;
+                line-height: 1.4;
+                margin-bottom: 1rem;
+            }}
+            h1 {{
+                font-size: 2rem !important;
+                line-height: 1.05 !important;
+            }}
+            .filter-note {{
+                font-size: 0.82rem;
+            }}
         }}
         </style>
         """,
@@ -284,19 +309,20 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 
-filter_cols = st.columns([1.2, 1.2, 0.8, 0.8])
-
 team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
 position_options = ["All Positions", "GK", "DEF", "MID", "FWD"]
 
-with filter_cols[0]:
-    team_filter = st.selectbox("Team", options=team_options)
-with filter_cols[1]:
-    player_filter = st.text_input("Player name", placeholder="Search player...")
-with filter_cols[2]:
-    position_filter = st.selectbox("Position", options=position_options)
-with filter_cols[3]:
-    min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45)
+with st.container():
+    filter_cols = st.columns([1.15, 1.15, 0.9, 0.8])
+
+    with filter_cols[0]:
+        team_filter = st.selectbox("Team", options=team_options)
+    with filter_cols[1]:
+        player_filter = st.text_input("Player name", placeholder="Search player...")
+    with filter_cols[2]:
+        position_filter = st.selectbox("Position", options=position_options)
+    with filter_cols[3]:
+        min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45)
 
 filtered_df = df.copy()
 if team_filter != "All Teams":
