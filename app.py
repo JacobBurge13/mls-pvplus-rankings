@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import os
 from dataclasses import dataclass
+from pathlib import Path
 
 import pandas as pd
 import psycopg2
@@ -103,7 +104,7 @@ def inject_styles() -> None:
             color: {GOLD};
             text-transform: uppercase;
             letter-spacing: 0.16em;
-            font-size: 0.78rem;
+            font-size: 1rem;
             font-weight: 800;
             margin-bottom: 0.35rem;
         }}
@@ -119,6 +120,17 @@ def inject_styles() -> None:
             color: {MUTED};
             font-size: 0.9rem;
             margin-top: 0.9rem;
+        }}
+        .title-row {{
+            display: flex;
+            align-items: center;
+            gap: 1rem;
+            margin-bottom: 0.35rem;
+        }}
+        .title-logo img {{
+            width: 84px;
+            max-width: 84px;
+            filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
         }}
         div[data-baseweb="select"] > div,
         div[data-baseweb="input"] > div {{
@@ -137,13 +149,20 @@ def inject_styles() -> None:
                 padding-right: 0.8rem;
             }}
             .pv-kicker {{
-                font-size: 0.68rem;
+                font-size: 0.82rem;
                 letter-spacing: 0.12em;
             }}
             .pv-subtitle {{
                 font-size: 0.82rem;
                 line-height: 1.4;
                 margin-bottom: 1rem;
+            }}
+            .title-row {{
+                gap: 0.7rem;
+            }}
+            .title-logo img {{
+                width: 58px;
+                max-width: 58px;
             }}
             h1 {{
                 font-size: 2rem !important;
@@ -296,8 +315,14 @@ def load_player_data() -> pd.DataFrame:
 
 inject_styles()
 
+logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
 st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
-st.title("PV+ PLAYER RANKINGS")
+title_cols = st.columns([0.08, 0.92], vertical_alignment="center")
+with title_cols[0]:
+    if logo_path.exists():
+        st.image(str(logo_path), use_container_width=True)
+with title_cols[1]:
+    st.title("PV+ PLAYER RANKINGS")
 st.markdown(
     '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
     unsafe_allow_html=True,
@@ -335,6 +360,7 @@ if position_filter != "All Positions":
     filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
 filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
 filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
+filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
 st.markdown(
     f"""
@@ -347,6 +373,7 @@ st.markdown(
 
 display_df = filtered_df[
     [
+        "rank",
         "player_name",
         "team_name",
         "position_group",
@@ -360,6 +387,7 @@ display_df = filtered_df[
     ]
 ].rename(
     columns={
+        "rank": "Rank",
         "player_name": "Player",
         "team_name": "Team",
         "position_group": "Position",
@@ -377,7 +405,9 @@ st.dataframe(
     display_df,
     use_container_width=True,
     hide_index=True,
+    height=780,
     column_config={
+        "Rank": st.column_config.NumberColumn("Rank", format="%d"),
         "Matches": st.column_config.NumberColumn("Matches", format="%d"),
         "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
         "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
