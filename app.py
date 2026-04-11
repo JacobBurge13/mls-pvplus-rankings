@@ -737,16 +737,38 @@ with player_tab:
         unsafe_allow_html=True,
     )
 
-    player_detail_options = filtered_df["player_name"].dropna().tolist()
-    selected_player = st.selectbox(
+    player_detail_source = filtered_df.copy() if len(filtered_df) > 0 else df.copy()
+    player_detail_source = (
+        player_detail_source[["player_id", "player_name", "team_name", "player_age",
+                              "pv_passing", "pv_receiving", "pv_carrying", "pv_shooting",
+                              "pv_defending", "pv_total"]]
+        .drop_duplicates(subset=["player_id"])
+        .sort_values(["player_name", "team_name"])
+        .reset_index(drop=True)
+    )
+    player_detail_source["player_label"] = player_detail_source.apply(
+        lambda r: f"{r['player_name']} | {r['team_name']}",
+        axis=1,
+    )
+    player_option_map = dict(
+        zip(player_detail_source["player_label"], player_detail_source["player_id"])
+    )
+
+    selected_player_label = st.selectbox(
         "Player detail",
-        options=player_detail_options,
-        index=0 if player_detail_options else None,
+        options=player_detail_source["player_label"].tolist(),
+        index=None,
+        placeholder="Select a player",
         key="selected_player_detail",
     )
 
-    if selected_player:
-        player_row = filtered_df[filtered_df["player_name"] == selected_player].iloc[0]
+    if selected_player_label:
+        selected_player_id = player_option_map[selected_player_label]
+        player_row = (
+            player_detail_source[player_detail_source["player_id"] == selected_player_id]
+            .iloc[0]
+        )
+        selected_player = player_row["player_name"]
         pie_df = pd.DataFrame(
             {
                 "Category": ["Passing", "Receiving", "Carrying", "Shooting", "Defending"],
@@ -761,7 +783,7 @@ with player_tab:
         )
         pie_colors = [BLUE, GREEN, GOLD, RED, GREY]
 
-        trend_df = player_match_df[player_match_df["player_name"] == selected_player].copy()
+        trend_df = player_match_df[player_match_df["player_id"] == selected_player_id].copy()
         trend_df = trend_df.sort_values(["match_date", "match_id"]).reset_index(drop=True)
         trend_df["match_label"] = trend_df.apply(
             lambda r: f"{r['match_date'].date()} | {r['home_team_name']} vs {r['away_team_name']}",
