@@ -3,8 +3,6 @@ from __future__ import annotations
 import os
 import base64
 from dataclasses import dataclass
-from pathlib import Path
-
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
@@ -175,19 +173,6 @@ def inject_styles() -> None:
             font-size: 0.9rem;
             margin-top: 0.9rem;
         }}
-        .header-crest {{
-            display: flex;
-            justify-content: flex-end;
-            align-items: flex-start;
-            width: 100%;
-            padding-top: 0.1rem;
-            margin-right: -0.2rem;
-        }}
-        .header-crest img {{
-            display: block;
-            margin-left: auto;
-            filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
-        }}
         div[data-baseweb="select"] > div,
         div[data-baseweb="input"] > div {{
             background: rgba(255,255,255,0.04);
@@ -219,10 +204,6 @@ def inject_styles() -> None:
             .front-subtitle {{
                 font-size: 1.1rem;
                 margin-bottom: 1rem;
-            }}
-            .header-crest {{
-                padding-top: 0.05rem;
-                margin-right: 0;
             }}
             h1 {{
                 font-size: 2rem !important;
@@ -871,19 +852,11 @@ def render_player_detail_screen(
 
 inject_styles()
 
-logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
-title_cols = st.columns([0.93, 0.07], vertical_alignment="top")
-with title_cols[0]:
-    st.markdown(
-        '<div class="front-title">Sunday League Stats</div>'
-        '<div class="front-subtitle">Possession Value Added</div>',
-        unsafe_allow_html=True,
-    )
-with title_cols[1]:
-    if logo_path.exists():
-        st.markdown('<div class="header-crest">', unsafe_allow_html=True)
-        st.image(str(logo_path), width=96)
-        st.markdown("</div>", unsafe_allow_html=True)
+st.markdown(
+    '<div class="front-title">Sunday League Stats</div>'
+    '<div class="front-subtitle">Possession Value Added</div>',
+    unsafe_allow_html=True,
+)
 
 try:
     df = load_player_data()
