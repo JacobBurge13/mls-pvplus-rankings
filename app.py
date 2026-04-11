@@ -128,8 +128,8 @@ def inject_styles() -> None:
             margin-bottom: 0.35rem;
         }}
         .title-logo img {{
-            width: 84px;
-            max-width: 84px;
+            width: 96px;
+            max-width: 96px;
             filter: drop-shadow(0 8px 18px rgba(0,0,0,0.22));
         }}
         div[data-baseweb="select"] > div,
@@ -161,8 +161,8 @@ def inject_styles() -> None:
                 gap: 0.7rem;
             }}
             .title-logo img {{
-                width: 58px;
-                max-width: 58px;
+                width: 64px;
+                max-width: 64px;
             }}
             h1 {{
                 font-size: 2rem !important;
@@ -317,12 +317,14 @@ inject_styles()
 
 logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
 st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
-title_cols = st.columns([0.08, 0.92], vertical_alignment="center")
+title_cols = st.columns([0.84, 0.16], vertical_alignment="center")
 with title_cols[0]:
-    if logo_path.exists():
-        st.image(str(logo_path), use_container_width=True)
-with title_cols[1]:
     st.title("PV+ PLAYER RANKINGS")
+with title_cols[1]:
+    if logo_path.exists():
+        st.markdown('<div class="title-logo">', unsafe_allow_html=True)
+        st.image(str(logo_path), use_container_width=True)
+        st.markdown("</div>", unsafe_allow_html=True)
 st.markdown(
     '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
     unsafe_allow_html=True,
