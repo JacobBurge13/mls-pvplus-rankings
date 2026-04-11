@@ -672,7 +672,7 @@ with player_tab:
     st.markdown(
         f"""
         <div class="filter-note">
-            Showing <strong>{len(filtered_df):,}</strong> players from the 2026 season.
+            Showing <strong>{len(filtered_df):,}</strong> players from the 2026 season. Click a player row to load the charts below.
         </div>
         """,
         unsafe_allow_html=True,
@@ -710,11 +710,13 @@ with player_tab:
         }
     )
 
-    st.dataframe(
+    player_table_event = st.dataframe(
         display_df,
         use_container_width=True,
         hide_index=True,
         height=780,
+        on_select="rerun",
+        selection_mode="single-row",
         column_config={
             "Rank": st.column_config.NumberColumn("Rank", format="%d"),
             "Age": st.column_config.NumberColumn("Age", format="%d"),
@@ -728,46 +730,11 @@ with player_tab:
         },
     )
 
-    st.markdown(
-        """
-        <div class="filter-note">
-            Select a player to see category share and match-by-match PV+ trend.
-        </div>
-        """,
-        unsafe_allow_html=True,
-    )
-
-    player_detail_source = filtered_df.copy() if len(filtered_df) > 0 else df.copy()
-    player_detail_source = (
-        player_detail_source[["player_id", "player_name", "team_name", "player_age",
-                              "pv_passing", "pv_receiving", "pv_carrying", "pv_shooting",
-                              "pv_defending", "pv_total"]]
-        .drop_duplicates(subset=["player_id"])
-        .sort_values(["player_name", "team_name"])
-        .reset_index(drop=True)
-    )
-    player_detail_source["player_label"] = player_detail_source.apply(
-        lambda r: f"{r['player_name']} | {r['team_name']}",
-        axis=1,
-    )
-    player_option_map = dict(
-        zip(player_detail_source["player_label"], player_detail_source["player_id"])
-    )
-
-    selected_player_label = st.selectbox(
-        "Player detail",
-        options=player_detail_source["player_label"].tolist(),
-        index=None,
-        placeholder="Select a player",
-        key="selected_player_detail",
-    )
-
-    if selected_player_label:
-        selected_player_id = player_option_map[selected_player_label]
-        player_row = (
-            player_detail_source[player_detail_source["player_id"] == selected_player_id]
-            .iloc[0]
-        )
+    selected_rows = player_table_event.selection.rows if player_table_event else []
+    if selected_rows:
+        selected_row_index = selected_rows[0]
+        player_row = filtered_df.iloc[selected_row_index]
+        selected_player_id = player_row["player_id"]
         selected_player = player_row["player_name"]
         pie_df = pd.DataFrame(
             {
@@ -828,6 +795,15 @@ with player_tab:
             line_fig.update_layout(title=f"{selected_player} | PV+ Over Season")
             chart_layout(line_fig)
             st.plotly_chart(line_fig, use_container_width=True)
+    else:
+        st.markdown(
+            """
+            <div class="filter-note">
+                Select a player row in the table above to see the PV+ breakdown and match-by-match trend.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
 
 with team_tab:
     teams_for_tab, teams_against_tab = st.tabs(["For", "Against"])
