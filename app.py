@@ -293,6 +293,7 @@ def load_player_data() -> pd.DataFrame:
         SELECT DISTINCT ON (regexp_replace(player_id, '_\\(\\d{4}\\)$', ''))
             regexp_replace(player_id, '_\\(\\d{4}\\)$', '') AS player_id_raw,
             name AS player_name,
+            age AS player_age,
             position
         FROM public.players
         ORDER BY regexp_replace(player_id, '_\\(\\d{4}\\)$', ''), (player_id LIKE '%(2026)') DESC, player_id
@@ -337,6 +338,7 @@ def load_player_data() -> pd.DataFrame:
     SELECT
         e.player_id,
         COALESCE(p.player_name, 'Unknown Player') AS player_name,
+        p.player_age,
         COALESCE(t.team_name, 'Unknown Team') AS team_name,
         COALESCE(p.position, '') AS position,
         COALESCE(m.matches, 0) AS matches,
@@ -371,6 +373,7 @@ def load_player_data() -> pd.DataFrame:
         conn.close()
 
     numeric_cols = [
+        "player_age",
         "matches",
         "minutes_played",
         "pv_total",
@@ -455,6 +458,7 @@ with player_tab:
         [
             "rank",
             "player_name",
+            "player_age",
             "team_name",
             "position_group",
             "matches",
@@ -469,6 +473,7 @@ with player_tab:
         columns={
             "rank": "Rank",
             "player_name": "Player",
+            "player_age": "Age",
             "team_name": "Team",
             "position_group": "Position",
             "matches": "Matches",
@@ -488,6 +493,7 @@ with player_tab:
         height=780,
         column_config={
             "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+            "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
