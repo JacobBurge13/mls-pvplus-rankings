@@ -5,6 +5,8 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import pandas as pd
+import plotly.express as px
+import plotly.graph_objects as go
 import psycopg2
 import streamlit as st
 
@@ -23,6 +25,9 @@ TEXT = "#f5f7fb"
 MUTED = "#8f98a8"
 GOLD = "#c7a15a"
 BLUE = "#5d86c9"
+GREEN = "#76d37c"
+RED = "#ef6b6b"
+GREY = "#b8bec9"
 
 
 @dataclass(frozen=True)
@@ -264,6 +269,112 @@ def load_team_data() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
+def load_team_against_data() -> pd.DataFrame:
+    query = """
+    WITH matches_2026 AS (
+        SELECT match_id, home_team_name, away_team_name
+        FROM public.matches
+        WHERE match_date >= DATE '2026-01-01'
+          AND match_date < DATE '2027-01-01'
+    ),
+    match_events_2026 AS (
+        SELECT
+            e.match_id,
+            e.team_id,
+            COALESCE(e.gplus, 0) AS gplus,
+            COALESCE(e.gplus_passing, 0) AS gplus_passing,
+            COALESCE(e.gplus_receiving, 0) AS gplus_receiving,
+            COALESCE(e.gplus_carrying, 0) AS gplus_carrying,
+            COALESCE(e.gplus_shooting, 0) AS gplus_shooting,
+            COALESCE(e.gplus_defending, 0) AS gplus_defending
+        FROM public.match_event e
+        INNER JOIN matches_2026 m
+            ON m.match_id = e.match_id
+        WHERE e.team_id IS NOT NULL
+    ),
+    team_lookup AS (
+        SELECT DISTINCT ON (regexp_replace(team_id, '_\\(\\d{4}\\)$', ''))
+            regexp_replace(team_id, '_\\(\\d{4}\\)$', '') AS team_id_raw,
+            name AS team_name
+        FROM public.teams
+        ORDER BY regexp_replace(team_id, '_\\(\\d{4}\\)$', ''), (team_id LIKE '%(2026)') DESC, team_id
+    ),
+    events_with_team AS (
+        SELECT
+            e.match_id,
+            COALESCE(t.team_name, 'Unknown Team') AS event_team_name,
+            e.gplus,
+            e.gplus_passing,
+            e.gplus_receiving,
+            e.gplus_carrying,
+            e.gplus_shooting,
+            e.gplus_defending
+        FROM match_events_2026 e
+        LEFT JOIN team_lookup t
+            ON t.team_id_raw = e.team_id::text
+    ),
+    events_with_opponent AS (
+        SELECT
+            e.match_id,
+            CASE
+                WHEN e.event_team_name = m.home_team_name THEN m.away_team_name
+                WHEN e.event_team_name = m.away_team_name THEN m.home_team_name
+                ELSE NULL
+            END AS against_team_name,
+            e.gplus,
+            e.gplus_passing,
+            e.gplus_receiving,
+            e.gplus_carrying,
+            e.gplus_shooting,
+            e.gplus_defending
+        FROM events_with_team e
+        INNER JOIN matches_2026 m
+            ON m.match_id = e.match_id
+    )
+    SELECT
+        against_team_name AS team_name,
+        COUNT(DISTINCT match_id) AS matches,
+        SUM(gplus) AS pv_total,
+        SUM(gplus_passing) AS pv_passing,
+        SUM(gplus_receiving) AS pv_receiving,
+        SUM(gplus_carrying) AS pv_carrying,
+        SUM(gplus_shooting) AS pv_shooting,
+        SUM(gplus_defending) AS pv_defending
+    FROM events_with_opponent
+    WHERE against_team_name IS NOT NULL
+    GROUP BY against_team_name
+    ORDER BY pv_total DESC;
+    """
+
+    cfg = db_config()
+    conn = psycopg2.connect(
+        dbname=cfg.dbname,
+        user=cfg.user,
+        password=cfg.password,
+        host=cfg.host,
+        port=cfg.port,
+    )
+    try:
+        df = pd.read_sql(query, conn)
+    finally:
+        conn.close()
+
+    numeric_cols = [
+        "matches",
+        "pv_total",
+        "pv_passing",
+        "pv_receiving",
+        "pv_carrying",
+        "pv_shooting",
+        "pv_defending",
+    ]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    return df.sort_values("pv_total", ascending=False).reset_index(drop=True)
+
+
+@st.cache_data(ttl=900, show_spinner=False)
 def load_player_data() -> pd.DataFrame:
     query = """
     WITH matches_2026 AS (
@@ -390,6 +501,112 @@ def load_player_data() -> pd.DataFrame:
     return df
 
 
+@st.cache_data(ttl=900, show_spinner=False)
+def load_player_match_trends() -> pd.DataFrame:
+    query = """
+    WITH matches_2026 AS (
+        SELECT match_id, match_date, home_team_name, away_team_name
+        FROM public.matches
+        WHERE match_date >= DATE '2026-01-01'
+          AND match_date < DATE '2027-01-01'
+    ),
+    match_events_2026 AS (
+        SELECT
+            e.match_id,
+            e.player_id,
+            e.team_id,
+            COALESCE(e.gplus, 0) AS gplus,
+            COALESCE(e.gplus_passing, 0) AS gplus_passing,
+            COALESCE(e.gplus_receiving, 0) AS gplus_receiving,
+            COALESCE(e.gplus_carrying, 0) AS gplus_carrying,
+            COALESCE(e.gplus_shooting, 0) AS gplus_shooting,
+            COALESCE(e.gplus_defending, 0) AS gplus_defending
+        FROM public.match_event e
+        INNER JOIN matches_2026 m
+            ON m.match_id = e.match_id
+        WHERE e.player_id IS NOT NULL
+    ),
+    player_lookup AS (
+        SELECT DISTINCT ON (regexp_replace(player_id, '_\\(\\d{4}\\)$', ''))
+            regexp_replace(player_id, '_\\(\\d{4}\\)$', '') AS player_id_raw,
+            name AS player_name
+        FROM public.players
+        ORDER BY regexp_replace(player_id, '_\\(\\d{4}\\)$', ''), (player_id LIKE '%(2026)') DESC, player_id
+    ),
+    team_lookup AS (
+        SELECT DISTINCT ON (regexp_replace(team_id, '_\\(\\d{4}\\)$', ''))
+            regexp_replace(team_id, '_\\(\\d{4}\\)$', '') AS team_id_raw,
+            name AS team_name
+        FROM public.teams
+        ORDER BY regexp_replace(team_id, '_\\(\\d{4}\\)$', ''), (team_id LIKE '%(2026)') DESC, team_id
+    )
+    SELECT
+        e.player_id,
+        COALESCE(p.player_name, 'Unknown Player') AS player_name,
+        COALESCE(t.team_name, 'Unknown Team') AS team_name,
+        m.match_id,
+        m.match_date,
+        m.home_team_name,
+        m.away_team_name,
+        SUM(e.gplus) AS pv_total,
+        SUM(e.gplus_passing) AS pv_passing,
+        SUM(e.gplus_receiving) AS pv_receiving,
+        SUM(e.gplus_carrying) AS pv_carrying,
+        SUM(e.gplus_shooting) AS pv_shooting,
+        SUM(e.gplus_defending) AS pv_defending
+    FROM match_events_2026 e
+    INNER JOIN matches_2026 m
+        ON m.match_id = e.match_id
+    LEFT JOIN player_lookup p
+        ON p.player_id_raw = e.player_id::text
+    LEFT JOIN team_lookup t
+        ON t.team_id_raw = e.team_id::text
+    GROUP BY
+        e.player_id, p.player_name, t.team_name,
+        m.match_id, m.match_date, m.home_team_name, m.away_team_name
+    ORDER BY m.match_date, m.match_id;
+    """
+
+    cfg = db_config()
+    conn = psycopg2.connect(
+        dbname=cfg.dbname,
+        user=cfg.user,
+        password=cfg.password,
+        host=cfg.host,
+        port=cfg.port,
+    )
+    try:
+        df = pd.read_sql(query, conn)
+    finally:
+        conn.close()
+
+    numeric_cols = [
+        "pv_total",
+        "pv_passing",
+        "pv_receiving",
+        "pv_carrying",
+        "pv_shooting",
+        "pv_defending",
+    ]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+    df["match_date"] = pd.to_datetime(df["match_date"])
+    return df
+
+
+def chart_layout(fig: go.Figure) -> go.Figure:
+    fig.update_layout(
+        paper_bgcolor=PANEL,
+        plot_bgcolor=PANEL,
+        font=dict(color=TEXT),
+        margin=dict(l=20, r=20, t=40, b=20),
+        legend=dict(orientation="h", yanchor="bottom", y=1.02, x=1, xanchor="right"),
+    )
+    fig.update_xaxes(showgrid=False, linecolor=GRID, tickfont=dict(color=MUTED))
+    fig.update_yaxes(gridcolor="rgba(255,255,255,0.08)", zeroline=False, tickfont=dict(color=MUTED))
+    return fig
+
+
 inject_styles()
 
 logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
@@ -410,6 +627,8 @@ with title_cols[1]:
 try:
     df = load_player_data()
     team_df = load_team_data()
+    team_against_df = load_team_against_data()
+    player_match_df = load_player_match_trends()
 except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
@@ -509,58 +728,196 @@ with player_tab:
         },
     )
 
-with team_tab:
-    filtered_team_df = team_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
-    filtered_team_df["rank"] = range(1, len(filtered_team_df) + 1)
-
     st.markdown(
-        f"""
+        """
         <div class="filter-note">
-            Showing <strong>{len(filtered_team_df):,}</strong> teams from the 2026 season.
+            Select a player to see category share and match-by-match PV+ trend.
         </div>
         """,
         unsafe_allow_html=True,
     )
 
-    team_display_df = filtered_team_df[
-        [
-            "rank",
-            "team_name",
-            "matches",
-            "pv_total",
-            "pv_passing",
-            "pv_receiving",
-            "pv_carrying",
-            "pv_shooting",
-            "pv_defending",
-        ]
-    ].rename(
-        columns={
-            "rank": "Rank",
-            "team_name": "Team",
-            "matches": "Matches",
-            "pv_total": "PV+",
-            "pv_passing": "Passing",
-            "pv_receiving": "Receiving",
-            "pv_carrying": "Carrying",
-            "pv_shooting": "Shooting",
-            "pv_defending": "Defending",
-        }
+    player_detail_options = filtered_df["player_name"].dropna().tolist()
+    selected_player = st.selectbox(
+        "Player detail",
+        options=player_detail_options,
+        index=0 if player_detail_options else None,
+        key="selected_player_detail",
     )
 
-    st.dataframe(
-        team_display_df,
-        use_container_width=True,
-        hide_index=True,
-        height=780,
-        column_config={
-            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-            "Matches": st.column_config.NumberColumn("Matches", format="%d"),
-            "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
-            "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
-            "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
-            "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
-            "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
-            "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
-        },
-    )
+    if selected_player:
+        player_row = filtered_df[filtered_df["player_name"] == selected_player].iloc[0]
+        pie_df = pd.DataFrame(
+            {
+                "Category": ["Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+                "Value": [
+                    player_row["pv_passing"],
+                    player_row["pv_receiving"],
+                    player_row["pv_carrying"],
+                    player_row["pv_shooting"],
+                    player_row["pv_defending"],
+                ],
+            }
+        )
+        pie_colors = [BLUE, GREEN, GOLD, RED, GREY]
+
+        trend_df = player_match_df[player_match_df["player_name"] == selected_player].copy()
+        trend_df = trend_df.sort_values(["match_date", "match_id"]).reset_index(drop=True)
+        trend_df["match_label"] = trend_df.apply(
+            lambda r: f"{r['match_date'].date()} | {r['home_team_name']} vs {r['away_team_name']}",
+            axis=1,
+        )
+
+        detail_cols = st.columns(2)
+        with detail_cols[0]:
+            pie_fig = px.pie(
+                pie_df,
+                values="Value",
+                names="Category",
+                hole=0.45,
+                color="Category",
+                color_discrete_sequence=pie_colors,
+            )
+            pie_fig.update_traces(textinfo="percent+label", textfont_color=TEXT, marker=dict(line=dict(color=PANEL, width=2)))
+            pie_fig.update_layout(
+                paper_bgcolor=PANEL,
+                plot_bgcolor=PANEL,
+                font=dict(color=TEXT),
+                title=f"{selected_player} | PV+ Breakdown",
+                margin=dict(l=20, r=20, t=60, b=20),
+                legend=dict(font=dict(color=TEXT)),
+            )
+            st.plotly_chart(pie_fig, use_container_width=True)
+
+        with detail_cols[1]:
+            line_fig = go.Figure()
+            line_fig.add_trace(
+                go.Scatter(
+                    x=trend_df["match_date"],
+                    y=trend_df["pv_total"],
+                    mode="lines+markers",
+                    line=dict(color=GOLD, width=3),
+                    marker=dict(size=8, color=TEXT, line=dict(color=GOLD, width=2)),
+                    hovertext=trend_df["match_label"],
+                    hovertemplate="%{hovertext}<br>PV+: %{y:.2f}<extra></extra>",
+                    name="PV+",
+                )
+            )
+            line_fig.update_layout(title=f"{selected_player} | PV+ Over Season")
+            chart_layout(line_fig)
+            st.plotly_chart(line_fig, use_container_width=True)
+
+with team_tab:
+    teams_for_tab, teams_against_tab = st.tabs(["For", "Against"])
+
+    with teams_for_tab:
+        filtered_team_df = team_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
+        filtered_team_df["rank"] = range(1, len(filtered_team_df) + 1)
+
+        st.markdown(
+            f"""
+            <div class="filter-note">
+                Showing <strong>{len(filtered_team_df):,}</strong> teams from the 2026 season.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        team_display_df = filtered_team_df[
+            [
+                "rank",
+                "team_name",
+                "matches",
+                "pv_total",
+                "pv_passing",
+                "pv_receiving",
+                "pv_carrying",
+                "pv_shooting",
+                "pv_defending",
+            ]
+        ].rename(
+            columns={
+                "rank": "Rank",
+                "team_name": "Team",
+                "matches": "Matches",
+                "pv_total": "PV+",
+                "pv_passing": "Passing",
+                "pv_receiving": "Receiving",
+                "pv_carrying": "Carrying",
+                "pv_shooting": "Shooting",
+                "pv_defending": "Defending",
+            }
+        )
+
+        st.dataframe(
+            team_display_df,
+            use_container_width=True,
+            hide_index=True,
+            height=780,
+            column_config={
+                "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+                "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
+                "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
+                "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
+                "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
+                "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
+                "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
+            },
+        )
+
+    with teams_against_tab:
+        against_df = team_against_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
+        against_df["rank"] = range(1, len(against_df) + 1)
+
+        st.markdown(
+            f"""
+            <div class="filter-note">
+                Showing PV+ earned <strong>against</strong> each team in the 2026 season.
+            </div>
+            """,
+            unsafe_allow_html=True,
+        )
+
+        against_display_df = against_df[
+            [
+                "rank",
+                "team_name",
+                "matches",
+                "pv_total",
+                "pv_passing",
+                "pv_receiving",
+                "pv_carrying",
+                "pv_shooting",
+                "pv_defending",
+            ]
+        ].rename(
+            columns={
+                "rank": "Rank",
+                "team_name": "Team",
+                "matches": "Matches",
+                "pv_total": "PV+ Against",
+                "pv_passing": "Passing Against",
+                "pv_receiving": "Receiving Against",
+                "pv_carrying": "Carrying Against",
+                "pv_shooting": "Shooting Against",
+                "pv_defending": "Defending Against",
+            }
+        )
+
+        st.dataframe(
+            against_display_df,
+            use_container_width=True,
+            hide_index=True,
+            height=780,
+            column_config={
+                "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+                "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+                "PV+ Against": st.column_config.NumberColumn("PV+ Against", format="%.2f"),
+                "Passing Against": st.column_config.NumberColumn("Passing Against", format="%.2f"),
+                "Receiving Against": st.column_config.NumberColumn("Receiving Against", format="%.2f"),
+                "Carrying Against": st.column_config.NumberColumn("Carrying Against", format="%.2f"),
+                "Shooting Against": st.column_config.NumberColumn("Shooting Against", format="%.2f"),
+                "Defending Against": st.column_config.NumberColumn("Defending Against", format="%.2f"),
+            },
+        )
