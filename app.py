@@ -463,6 +463,7 @@ with player_tab:
         [
             "rank",
             "player_name",
+            "player_age",
             "team_name",
             "position_group",
             "matches",
@@ -477,6 +478,7 @@ with player_tab:
         columns={
             "rank": "Rank",
             "player_name": "Player",
+            "player_age": "Age",
             "team_name": "Team",
             "position_group": "Position",
             "matches": "Matches",
@@ -496,6 +498,7 @@ with player_tab:
         height=780,
         column_config={
             "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+            "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
