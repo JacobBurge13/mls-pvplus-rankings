@@ -421,15 +421,17 @@ with player_tab:
     position_options = ["All Positions", "GK", "DEF", "MID", "FWD"]
 
     with st.container():
-        filter_cols = st.columns([1.15, 1.15, 0.9, 0.8])
+        filter_cols = st.columns([1.0, 1.0, 0.8, 0.9, 0.75])
 
         with filter_cols[0]:
             team_filter = st.selectbox("Team", options=team_options, key="player_team_filter")
         with filter_cols[1]:
             player_filter = st.text_input("Player name", placeholder="Search player...", key="player_name_filter")
         with filter_cols[2]:
-            position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
+            max_age = st.number_input("Max age", min_value=0, value=99, step=1, key="player_age_filter")
         with filter_cols[3]:
+            position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
+        with filter_cols[4]:
             min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45, key="player_minutes_filter")
 
     filtered_df = df.copy()
@@ -439,6 +441,9 @@ with player_tab:
         filtered_df = filtered_df[
             filtered_df["player_name"].str.contains(player_filter, case=False, na=False)
         ]
+    filtered_df = filtered_df[
+        filtered_df["player_age"].fillna(999) <= max_age
+    ]
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
     filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
@@ -458,7 +463,6 @@ with player_tab:
         [
             "rank",
             "player_name",
-            "player_age",
             "team_name",
             "position_group",
             "matches",
@@ -473,7 +477,6 @@ with player_tab:
         columns={
             "rank": "Rank",
             "player_name": "Player",
-            "player_age": "Age",
             "team_name": "Team",
             "position_group": "Position",
             "matches": "Matches",
@@ -493,7 +496,6 @@ with player_tab:
         height=780,
         column_config={
             "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-            "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
