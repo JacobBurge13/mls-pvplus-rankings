@@ -97,27 +97,13 @@ def inject_styles() -> None:
             background: linear-gradient(180deg, rgba(19,25,35,0.98), rgba(11,16,24,0.98));
             border-right: 1px solid rgba(255,255,255,0.06);
         }}
-        .pv-shell {{
-            border: 1px solid rgba(255,255,255,0.08);
-            background: linear-gradient(180deg, rgba(19,25,35,0.94), rgba(11,16,24,0.98));
-            border-radius: 22px;
-            padding: 1.25rem 1.35rem;
-            box-shadow: 0 24px 60px rgba(0,0,0,0.28);
-        }}
         .pv-kicker {{
             color: {GOLD};
             text-transform: uppercase;
             letter-spacing: 0.16em;
             font-size: 0.78rem;
             font-weight: 800;
-        }}
-        .pv-title {{
-            font-size: 2.6rem;
-            line-height: 1;
-            font-weight: 900;
-            letter-spacing: -0.04em;
-            margin: 0.25rem 0 0.5rem 0;
-            text-transform: uppercase;
+            margin-bottom: 0.35rem;
         }}
         .pv-subtitle {{
             color: {MUTED};
@@ -125,6 +111,7 @@ def inject_styles() -> None:
             text-transform: uppercase;
             letter-spacing: 0.1em;
             font-weight: 700;
+            margin-bottom: 1.25rem;
         }}
         .filter-note {{
             color: {MUTED};
@@ -284,13 +271,10 @@ def load_player_data() -> pd.DataFrame:
 
 inject_styles()
 
+st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
+st.title("PV+ PLAYER RANKINGS")
 st.markdown(
-    """
-    <div class="pv-shell">
-        <div class="pv-kicker">MLS 2026 Season</div>
-        <div class="pv-title">PV+ Player Rankings</div>
-        <div class="pv-subtitle">Brought to you by Sunday League Stats</div>
-    """,
+    '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
     unsafe_allow_html=True,
 )
 
@@ -377,5 +361,3 @@ st.dataframe(
         "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
     },
 )
-
-st.markdown("</div>", unsafe_allow_html=True)
