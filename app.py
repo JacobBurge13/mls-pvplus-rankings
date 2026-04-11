@@ -126,7 +126,8 @@ def inject_styles() -> None:
             justify-content: flex-end;
             align-items: flex-start;
             width: 100%;
-            padding-top: 0.25rem;
+            padding-top: 0.1rem;
+            margin-right: -0.2rem;
         }}
         .header-crest img {{
             display: block;
@@ -159,7 +160,8 @@ def inject_styles() -> None:
                 margin-bottom: 1rem;
             }}
             .header-crest {{
-                padding-top: 0.1rem;
+                padding-top: 0.05rem;
+                margin-right: 0;
             }}
             h1 {{
                 font-size: 2rem !important;
@@ -313,7 +315,7 @@ def load_player_data() -> pd.DataFrame:
 inject_styles()
 
 logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
-title_cols = st.columns([0.9, 0.1], vertical_alignment="top")
+title_cols = st.columns([0.93, 0.07], vertical_alignment="top")
 with title_cols[0]:
     st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
     st.title("PV+ PLAYER RANKINGS")
@@ -324,7 +326,7 @@ with title_cols[0]:
 with title_cols[1]:
     if logo_path.exists():
         st.markdown('<div class="header-crest">', unsafe_allow_html=True)
-        st.image(str(logo_path), width=72)
+        st.image(str(logo_path), width=96)
         st.markdown("</div>", unsafe_allow_html=True)
 
 try:
