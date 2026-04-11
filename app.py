@@ -650,14 +650,12 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
         go.Barpolar(
             r=values,
             theta=theta,
-            width=[66] * len(theta),
-            marker_color=colors,
-            marker_line_color="rgba(255,255,255,0.8)",
-            marker_line_width=2,
+            width=66,
+            marker=dict(
+                color=colors,
+                line=dict(color="rgba(255,255,255,0.8)", width=2),
+            ),
             opacity=0.95,
-            text=[str(v) for v in display_values],
-            textposition="inside",
-            textfont=dict(color=TEXT, size=16),
             hovertemplate="%{theta}<br>Percentile: %{r:.0f}<extra></extra>",
         )
     )
