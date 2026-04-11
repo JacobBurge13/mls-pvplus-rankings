@@ -25,7 +25,7 @@ PANEL = "#131923"
 GRID = "#313846"
 TEXT = "#f5f7fb"
 MUTED = "#8f98a8"
-GOLD = "#c7a15a"
+GOLD = "#7fc8ff"
 BLUE = "#5d86c9"
 GREEN = "#76d37c"
 RED = "#ef6b6b"
@@ -156,6 +156,20 @@ def inject_styles() -> None:
             font-weight: 700;
             margin-bottom: 1.25rem;
         }}
+        .front-title {{
+            color: {TEXT};
+            font-size: 3.6rem;
+            font-weight: 900;
+            line-height: 1.02;
+            margin: 0 0 0.35rem 0;
+        }}
+        .front-subtitle {{
+            color: {GOLD};
+            font-size: 1.55rem;
+            font-weight: 800;
+            line-height: 1.1;
+            margin: 0 0 1.35rem 0;
+        }}
         .filter-note {{
             color: {MUTED};
             font-size: 0.9rem;
@@ -197,6 +211,13 @@ def inject_styles() -> None:
             .pv-subtitle {{
                 font-size: 0.82rem;
                 line-height: 1.4;
+                margin-bottom: 1rem;
+            }}
+            .front-title {{
+                font-size: 2.4rem;
+            }}
+            .front-subtitle {{
+                font-size: 1.1rem;
                 margin-bottom: 1rem;
             }}
             .header-crest {{
@@ -853,10 +874,9 @@ inject_styles()
 logo_path = Path(__file__).resolve().parent / "assets" / "unnamed.jpg"
 title_cols = st.columns([0.93, 0.07], vertical_alignment="top")
 with title_cols[0]:
-    st.markdown('<div class="pv-kicker">MLS 2026 Season</div>', unsafe_allow_html=True)
-    st.title("PV+ PLAYER RANKINGS")
     st.markdown(
-        '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
+        '<div class="front-title">Sunday League Stats</div>'
+        '<div class="front-subtitle">Possession Value Added</div>',
         unsafe_allow_html=True,
     )
 with title_cols[1]:
