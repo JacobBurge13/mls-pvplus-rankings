@@ -189,6 +189,81 @@ def position_group(position: str) -> str:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
+def load_team_data() -> pd.DataFrame:
+    query = """
+    WITH matches_2026 AS (
+        SELECT match_id
+        FROM public.matches
+        WHERE match_date >= DATE '2026-01-01'
+          AND match_date < DATE '2027-01-01'
+    ),
+    match_events_2026 AS (
+        SELECT
+            e.match_id,
+            e.team_id,
+            COALESCE(e.gplus, 0) AS gplus,
+            COALESCE(e.gplus_passing, 0) AS gplus_passing,
+            COALESCE(e.gplus_receiving, 0) AS gplus_receiving,
+            COALESCE(e.gplus_carrying, 0) AS gplus_carrying,
+            COALESCE(e.gplus_shooting, 0) AS gplus_shooting,
+            COALESCE(e.gplus_defending, 0) AS gplus_defending
+        FROM public.match_event e
+        INNER JOIN matches_2026 m
+            ON m.match_id = e.match_id
+        WHERE e.team_id IS NOT NULL
+    ),
+    team_lookup AS (
+        SELECT DISTINCT ON (regexp_replace(team_id, '_\\(\\d{4}\\)$', ''))
+            regexp_replace(team_id, '_\\(\\d{4}\\)$', '') AS team_id_raw,
+            name AS team_name
+        FROM public.teams
+        ORDER BY regexp_replace(team_id, '_\\(\\d{4}\\)$', ''), (team_id LIKE '%(2026)') DESC, team_id
+    )
+    SELECT
+        COALESCE(t.team_name, 'Unknown Team') AS team_name,
+        COUNT(DISTINCT e.match_id) AS matches,
+        SUM(e.gplus) AS pv_total,
+        SUM(e.gplus_passing) AS pv_passing,
+        SUM(e.gplus_receiving) AS pv_receiving,
+        SUM(e.gplus_carrying) AS pv_carrying,
+        SUM(e.gplus_shooting) AS pv_shooting,
+        SUM(e.gplus_defending) AS pv_defending
+    FROM match_events_2026 e
+    LEFT JOIN team_lookup t
+        ON t.team_id_raw = e.team_id::text
+    GROUP BY COALESCE(t.team_name, 'Unknown Team')
+    ORDER BY pv_total DESC;
+    """
+
+    cfg = db_config()
+    conn = psycopg2.connect(
+        dbname=cfg.dbname,
+        user=cfg.user,
+        password=cfg.password,
+        host=cfg.host,
+        port=cfg.port,
+    )
+    try:
+        df = pd.read_sql(query, conn)
+    finally:
+        conn.close()
+
+    numeric_cols = [
+        "matches",
+        "pv_total",
+        "pv_passing",
+        "pv_receiving",
+        "pv_carrying",
+        "pv_shooting",
+        "pv_defending",
+    ]
+    for col in numeric_cols:
+        df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    return df.sort_values("pv_total", ascending=False).reset_index(drop=True)
+
+
+@st.cache_data(ttl=900, show_spinner=False)
 def load_player_data() -> pd.DataFrame:
     query = """
     WITH matches_2026 AS (
@@ -331,90 +406,150 @@ with title_cols[1]:
 
 try:
     df = load_player_data()
+    team_df = load_team_data()
 except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 
-team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
-position_options = ["All Positions", "GK", "DEF", "MID", "FWD"]
+player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
 
-with st.container():
-    filter_cols = st.columns([1.15, 1.15, 0.9, 0.8])
+with player_tab:
+    team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
+    position_options = ["All Positions", "GK", "DEF", "MID", "FWD"]
 
-    with filter_cols[0]:
-        team_filter = st.selectbox("Team", options=team_options)
-    with filter_cols[1]:
-        player_filter = st.text_input("Player name", placeholder="Search player...")
-    with filter_cols[2]:
-        position_filter = st.selectbox("Position", options=position_options)
-    with filter_cols[3]:
-        min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45)
+    with st.container():
+        filter_cols = st.columns([1.15, 1.15, 0.9, 0.8])
 
-filtered_df = df.copy()
-if team_filter != "All Teams":
-    filtered_df = filtered_df[filtered_df["team_name"] == team_filter]
-if player_filter:
-    filtered_df = filtered_df[
-        filtered_df["player_name"].str.contains(player_filter, case=False, na=False)
-    ]
-if position_filter != "All Positions":
-    filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
-filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
-filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
-filtered_df["rank"] = range(1, len(filtered_df) + 1)
+        with filter_cols[0]:
+            team_filter = st.selectbox("Team", options=team_options, key="player_team_filter")
+        with filter_cols[1]:
+            player_filter = st.text_input("Player name", placeholder="Search player...", key="player_name_filter")
+        with filter_cols[2]:
+            position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
+        with filter_cols[3]:
+            min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45, key="player_minutes_filter")
 
-st.markdown(
-    f"""
-    <div class="filter-note">
-        Showing <strong>{len(filtered_df):,}</strong> players from the 2026 season.
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+    filtered_df = df.copy()
+    if team_filter != "All Teams":
+        filtered_df = filtered_df[filtered_df["team_name"] == team_filter]
+    if player_filter:
+        filtered_df = filtered_df[
+            filtered_df["player_name"].str.contains(player_filter, case=False, na=False)
+        ]
+    if position_filter != "All Positions":
+        filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
+    filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
+    filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
+    filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
-display_df = filtered_df[
-    [
-        "rank",
-        "player_name",
-        "team_name",
-        "position_group",
-        "matches",
-        "pv_total",
-        "pv_passing",
-        "pv_receiving",
-        "pv_carrying",
-        "pv_shooting",
-        "pv_defending",
-    ]
-].rename(
-    columns={
-        "rank": "Rank",
-        "player_name": "Player",
-        "team_name": "Team",
-        "position_group": "Position",
-        "matches": "Matches",
-        "pv_total": "PV+",
-        "pv_passing": "Passing",
-        "pv_receiving": "Receiving",
-        "pv_carrying": "Carrying",
-        "pv_shooting": "Shooting",
-        "pv_defending": "Defending",
-    }
-)
+    st.markdown(
+        f"""
+        <div class="filter-note">
+            Showing <strong>{len(filtered_df):,}</strong> players from the 2026 season.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
 
-st.dataframe(
-    display_df,
-    use_container_width=True,
-    hide_index=True,
-    height=780,
-    column_config={
-        "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-        "Matches": st.column_config.NumberColumn("Matches", format="%d"),
-        "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
-        "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
-        "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
-        "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
-        "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
-        "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
-    },
-)
+    display_df = filtered_df[
+        [
+            "rank",
+            "player_name",
+            "team_name",
+            "position_group",
+            "matches",
+            "pv_total",
+            "pv_passing",
+            "pv_receiving",
+            "pv_carrying",
+            "pv_shooting",
+            "pv_defending",
+        ]
+    ].rename(
+        columns={
+            "rank": "Rank",
+            "player_name": "Player",
+            "team_name": "Team",
+            "position_group": "Position",
+            "matches": "Matches",
+            "pv_total": "PV+",
+            "pv_passing": "Passing",
+            "pv_receiving": "Receiving",
+            "pv_carrying": "Carrying",
+            "pv_shooting": "Shooting",
+            "pv_defending": "Defending",
+        }
+    )
+
+    st.dataframe(
+        display_df,
+        use_container_width=True,
+        hide_index=True,
+        height=780,
+        column_config={
+            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+            "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+            "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
+            "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
+            "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
+            "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
+            "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
+            "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
+        },
+    )
+
+with team_tab:
+    filtered_team_df = team_df.copy().sort_values("pv_total", ascending=False).reset_index(drop=True)
+    filtered_team_df["rank"] = range(1, len(filtered_team_df) + 1)
+
+    st.markdown(
+        f"""
+        <div class="filter-note">
+            Showing <strong>{len(filtered_team_df):,}</strong> teams from the 2026 season.
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+
+    team_display_df = filtered_team_df[
+        [
+            "rank",
+            "team_name",
+            "matches",
+            "pv_total",
+            "pv_passing",
+            "pv_receiving",
+            "pv_carrying",
+            "pv_shooting",
+            "pv_defending",
+        ]
+    ].rename(
+        columns={
+            "rank": "Rank",
+            "team_name": "Team",
+            "matches": "Matches",
+            "pv_total": "PV+",
+            "pv_passing": "Passing",
+            "pv_receiving": "Receiving",
+            "pv_carrying": "Carrying",
+            "pv_shooting": "Shooting",
+            "pv_defending": "Defending",
+        }
+    )
+
+    st.dataframe(
+        team_display_df,
+        use_container_width=True,
+        hide_index=True,
+        height=780,
+        column_config={
+            "Rank": st.column_config.NumberColumn("Rank", format="%d"),
+            "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+            "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
+            "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
+            "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
+            "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
+            "Shooting": st.column_config.NumberColumn("Shooting", format="%.2f"),
+            "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
+        },
+    )
