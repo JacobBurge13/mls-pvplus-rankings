@@ -650,6 +650,7 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
 
     fig = plt.figure(figsize=(7.2, 7.8), facecolor=PANEL)
     ax = plt.subplot(111, polar=True, facecolor=PANEL)
+    fig.subplots_adjust(top=0.80, left=0.11, right=0.89, bottom=0.08)
     ax.set_theta_offset(np.pi / 2)
     ax.set_theta_direction(-1)
     ax.set_ylim(0, 100)
@@ -678,6 +679,7 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
 
     ax.set_xticks(angles)
     ax.set_xticklabels(labels, color=TEXT, fontsize=15)
+    ax.tick_params(axis="x", pad=12)
 
     centre = plt.Circle((0, 0), 12, transform=ax.transData._b, color=BG, zorder=5)
     ax.add_artist(centre)
@@ -708,7 +710,7 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
         0.95,
         selected_player_row["player_name"],
         color=TEXT,
-        fontsize=26,
+        fontsize=24,
         fontweight="bold",
         ha="left",
     )
@@ -717,7 +719,7 @@ def player_pizza_chart(selected_player_row: pd.Series, population_df: pd.DataFra
         0.905,
         f"{selected_player_row['team_name']} | {selected_player_row['position_group']} | MLS 2026",
         color=TEXT,
-        fontsize=16,
+        fontsize=15,
         fontweight="bold",
         ha="left",
     )
