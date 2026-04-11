@@ -322,9 +322,7 @@ with title_cols[0]:
     st.title("PV+ PLAYER RANKINGS")
 with title_cols[1]:
     if logo_path.exists():
-        st.markdown('<div class="title-logo">', unsafe_allow_html=True)
-        st.image(str(logo_path), use_container_width=True)
-        st.markdown("</div>", unsafe_allow_html=True)
+        st.image(str(logo_path), width=34)
 st.markdown(
     '<div class="pv-subtitle">Brought to you by Sunday League Stats</div>',
     unsafe_allow_html=True,
