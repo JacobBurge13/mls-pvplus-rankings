@@ -647,9 +647,9 @@ with player_tab:
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
     st.markdown(
-        f"""
+        """
         <div class="filter-note">
-            Showing <strong>{len(filtered_df):,}</strong> outfield players from the 2026 season.
+            Top 10% performers for each PV+ category are highlighted blue.
         </div>
         """,
         unsafe_allow_html=True,
