@@ -555,14 +555,19 @@ def add_team_logo_column(df: pd.DataFrame, team_col: str = "team_name") -> pd.Da
 
 
 def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.formats.style.Styler:
+    def highlight_top_20(series: pd.Series) -> list[str]:
+        numeric = pd.to_numeric(series, errors="coerce")
+        threshold = numeric.quantile(0.8)
+        styles = []
+        for value in numeric:
+            if pd.notna(value) and value >= threshold:
+                styles.append("background-color: rgba(127, 200, 255, 0.22);")
+            else:
+                styles.append("")
+        return styles
+
     return (
-        df.style.background_gradient(
-            cmap="Blues",
-            subset=numeric_columns,
-            low=0.98,
-            high=0.82,
-            axis=0,
-        )
+        df.style.apply(highlight_top_20, subset=numeric_columns, axis=0)
         .format(
             {
                 "Age": "{:.0f}",
