@@ -555,9 +555,9 @@ def add_team_logo_column(df: pd.DataFrame, team_col: str = "team_name") -> pd.Da
 
 
 def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.formats.style.Styler:
-    def highlight_top_20(series: pd.Series) -> list[str]:
+    def highlight_top_10(series: pd.Series) -> list[str]:
         numeric = pd.to_numeric(series, errors="coerce")
-        threshold = numeric.quantile(0.8)
+        threshold = numeric.quantile(0.9)
         styles = []
         for value in numeric:
             if pd.notna(value) and value >= threshold:
@@ -567,7 +567,7 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
         return styles
 
     return (
-        df.style.apply(highlight_top_20, subset=numeric_columns, axis=0)
+        df.style.apply(highlight_top_10, subset=numeric_columns, axis=0)
         .format(
             {
                 "Age": "{:.0f}",
@@ -628,7 +628,7 @@ with player_tab:
         with filter_cols[3]:
             position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
         with filter_cols[4]:
-            min_minutes = st.number_input("Minimum minutes", min_value=0, value=0, step=45, key="player_minutes_filter")
+            min_matches = st.number_input("Minimum matches", min_value=0, value=0, step=1, key="player_matches_filter")
 
     filtered_df = df.copy()
     if team_filter != "All Teams":
@@ -642,7 +642,7 @@ with player_tab:
     ]
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
-    filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
+    filtered_df = filtered_df[filtered_df["matches"] >= min_matches]
     filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
