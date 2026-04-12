@@ -754,7 +754,7 @@ with team_tab:
             st.dataframe(
                 style_rankings_table(
                     team_display_df,
-                    numeric_columns=["Matches", "PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+                    numeric_columns=["PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
                 ),
                 use_container_width=True,
                 hide_index=True,
@@ -815,7 +815,6 @@ with team_tab:
                 style_rankings_table(
                     against_display_df,
                     numeric_columns=[
-                        "Matches",
                         "PV+ Against",
                         "Passing Against",
                         "Receiving Against",
