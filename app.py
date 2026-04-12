@@ -559,8 +559,8 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
         df.style.background_gradient(
             cmap="Blues",
             subset=numeric_columns,
-            low=0.9,
-            high=0.0,
+            low=0.98,
+            high=0.82,
             axis=0,
         )
         .format(
@@ -609,7 +609,7 @@ player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
 with player_tab:
     team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
     position_options = ["All Positions", "DEF", "MID", "FWD"]
-    default_max_age = int(df["player_age"].max()) if not df.empty else 99
+    default_max_age = 40
 
     with st.container():
         filter_cols = st.columns([1.0, 1.0, 0.8, 0.9, 0.75])
@@ -685,7 +685,7 @@ with player_tab:
     st.dataframe(
         style_rankings_table(
             display_df,
-            numeric_columns=["Age", "Matches", "PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+            numeric_columns=["PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
         ),
         use_container_width=True,
         hide_index=True,
