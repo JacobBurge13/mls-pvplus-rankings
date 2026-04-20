@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import base64
 from dataclasses import dataclass
 from pathlib import Path
 import pandas as pd
@@ -537,20 +536,19 @@ def load_player_data() -> pd.DataFrame:
 
 
 @st.cache_data(show_spinner=False)
-def team_logo_data_uri(team_name: str) -> str | None:
+def team_logo_path(team_name: str) -> str | None:
     logo_id = TEAM_LOGO_IDS.get(team_name)
     if not logo_id:
         return None
     logo_path = Path(__file__).resolve().parent / "assets" / "mls_logos" / f"{logo_id}_image.png"
     if not logo_path.exists():
         return None
-    encoded = base64.b64encode(logo_path.read_bytes()).decode("utf-8")
-    return f"data:image/png;base64,{encoded}"
+    return str(logo_path)
 
 
 def add_team_logo_column(df: pd.DataFrame, team_col: str = "team_name") -> pd.DataFrame:
     enriched_df = df.copy()
-    enriched_df["team_logo"] = enriched_df[team_col].apply(team_logo_data_uri)
+    enriched_df["team_logo"] = enriched_df[team_col].apply(team_logo_path)
     return enriched_df
 
 
