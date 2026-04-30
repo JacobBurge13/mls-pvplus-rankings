@@ -539,6 +539,18 @@ def load_player_data() -> pd.DataFrame:
         df["pv_total"] / df["actions"],
         0.0,
     )
+    # Volume-aware performer metric:
+    # - Shrinks noisy small samples toward league rate
+    # - Rewards sustained outperformance over larger action totals
+    prior_actions = 300.0
+    total_actions = float(df["actions"].sum())
+    league_rate = float(df["pv_total"].sum()) / total_actions if total_actions > 0 else 0.0
+    df["stabilized_pv_per_action"] = np.where(
+        (df["actions"] + prior_actions) > 0,
+        (df["pv_total"] + prior_actions * league_rate) / (df["actions"] + prior_actions),
+        league_rate,
+    )
+    df["performance_score"] = (df["stabilized_pv_per_action"] - league_rate) * df["actions"]
 
     df["position_group"] = df["position"].apply(position_group)
     return df
@@ -582,7 +594,7 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
                 "Actions": "{:.0f}",
                 "PV+": "{:.2f}",
                 "Total PV+": "{:.2f}",
-                "PV+ Per Action": "{:.4f}",
+                "Performance Score": "{:.2f}",
                 "Passing": "{:.2f}",
                 "Receiving": "{:.2f}",
                 "Carrying": "{:.2f}",
@@ -616,8 +628,6 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 df = df[df["position_group"] != "GK"].copy()
-league_avg_actions = int(round(df["actions"].mean())) if len(df) else 0
-df = df[df["actions"] >= league_avg_actions].copy()
 df = add_team_logo_column(df)
 team_df = add_team_logo_column(team_df)
 team_against_df = add_team_logo_column(team_against_df)
@@ -642,8 +652,8 @@ with player_tab:
         with filter_cols[4]:
             min_actions = st.number_input(
                 "Minimum actions",
-                min_value=league_avg_actions,
-                value=league_avg_actions,
+                min_value=0,
+                value=0,
                 step=25,
                 key="player_actions_filter",
             )
@@ -665,9 +675,9 @@ with player_tab:
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
     st.markdown(
-        f"""
+        """
         <div class="filter-note">
-            Players with fewer than the league-average action threshold (<strong>{league_avg_actions}</strong>) are excluded. Top 10% performers for each PV+ category are highlighted blue.
+            All players are included by default. Top 10% performers for each PV+ category are highlighted blue.
         </div>
         """,
         unsafe_allow_html=True,
@@ -683,7 +693,7 @@ with player_tab:
             "matches",
             "actions",
             "pv_total",
-            "pv_per_action",
+            "performance_score",
             "pv_passing",
             "pv_receiving",
             "pv_carrying",
@@ -700,7 +710,7 @@ with player_tab:
             "matches": "Matches",
             "actions": "Actions",
             "pv_total": "Total PV+",
-            "pv_per_action": "PV+ Per Action",
+            "performance_score": "Performance Score",
             "pv_passing": "Passing",
             "pv_receiving": "Receiving",
             "pv_carrying": "Carrying",
@@ -712,7 +722,7 @@ with player_tab:
     st.dataframe(
         style_rankings_table(
             display_df,
-            numeric_columns=["Total PV+", "PV+ Per Action", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+            numeric_columns=["Performance Score", "Total PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
         ),
         use_container_width=True,
         hide_index=True,
@@ -723,8 +733,12 @@ with player_tab:
             "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "Actions": st.column_config.NumberColumn("Actions", format="%d"),
+            "Performance Score": st.column_config.NumberColumn(
+                "Performance Score",
+                format="%.2f",
+                help="Volume-aware metric: stabilized PV+/action relative to league average, scaled by total actions.",
+            ),
             "Total PV+": st.column_config.NumberColumn("Total PV+", format="%.2f"),
-            "PV+ Per Action": st.column_config.NumberColumn("PV+ Per Action", format="%.4f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
             "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
             "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
