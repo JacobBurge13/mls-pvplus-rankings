@@ -533,16 +533,10 @@ def load_player_data() -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
-    # Empirical-Bayes style smoothing so small action samples shrink toward league-average PV+/action.
-    smoothing_actions = 300.0
-    total_actions = float(df["actions"].sum())
-    if total_actions > 0:
-        league_pv_per_action = float(df["pv_total"].sum()) / total_actions
-    else:
-        league_pv_per_action = 0.0
-    df["pv_total_smoothed"] = (
-        ((df["pv_total"] + (smoothing_actions * league_pv_per_action)) / (df["actions"] + smoothing_actions))
-        * df["actions"]
+    df["pv_per_action"] = np.where(
+        df["actions"] > 0,
+        df["pv_total"] / df["actions"],
+        0.0,
     )
 
     df["position_group"] = df["position"].apply(position_group)
@@ -587,7 +581,7 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
                 "Actions": "{:.0f}",
                 "PV+": "{:.2f}",
                 "Total PV+": "{:.2f}",
-                "PV+ (Smoothed)": "{:.2f}",
+                "PV+ Per Action": "{:.4f}",
                 "Passing": "{:.2f}",
                 "Receiving": "{:.2f}",
                 "Carrying": "{:.2f}",
@@ -681,7 +675,7 @@ with player_tab:
             "matches",
             "actions",
             "pv_total",
-            "pv_total_smoothed",
+            "pv_per_action",
             "pv_passing",
             "pv_receiving",
             "pv_carrying",
@@ -699,7 +693,7 @@ with player_tab:
             "matches": "Matches",
             "actions": "Actions",
             "pv_total": "Total PV+",
-            "pv_total_smoothed": "PV+ (Smoothed)",
+            "pv_per_action": "PV+ Per Action",
             "pv_passing": "Passing",
             "pv_receiving": "Receiving",
             "pv_carrying": "Carrying",
@@ -711,7 +705,7 @@ with player_tab:
     st.dataframe(
         style_rankings_table(
             display_df,
-            numeric_columns=["Total PV+", "PV+ (Smoothed)", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+            numeric_columns=["Total PV+", "PV+ Per Action", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
         ),
         use_container_width=True,
         hide_index=True,
@@ -724,7 +718,7 @@ with player_tab:
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "Actions": st.column_config.NumberColumn("Actions", format="%d"),
             "Total PV+": st.column_config.NumberColumn("Total PV+", format="%.2f"),
-            "PV+ (Smoothed)": st.column_config.NumberColumn("PV+ (Smoothed)", format="%.2f"),
+            "PV+ Per Action": st.column_config.NumberColumn("PV+ Per Action", format="%.4f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
             "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
             "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
