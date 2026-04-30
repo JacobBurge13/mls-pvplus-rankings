@@ -488,6 +488,7 @@ def load_player_data() -> pd.DataFrame:
         COALESCE(p.position, '') AS position,
         COALESCE(m.matches, 0) AS matches,
         COALESCE(m.minutes_played, 0) AS minutes_played,
+        COALESCE(e.actions, 0) AS actions,
         e.pv_total,
         e.pv_passing,
         e.pv_receiving,
@@ -521,6 +522,7 @@ def load_player_data() -> pd.DataFrame:
         "player_age",
         "matches",
         "minutes_played",
+        "actions",
         "pv_total",
         "pv_passing",
         "pv_receiving",
@@ -530,6 +532,18 @@ def load_player_data() -> pd.DataFrame:
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    # Empirical-Bayes style smoothing so small action samples shrink toward league-average PV+/action.
+    smoothing_actions = 300.0
+    total_actions = float(df["actions"].sum())
+    if total_actions > 0:
+        league_pv_per_action = float(df["pv_total"].sum()) / total_actions
+    else:
+        league_pv_per_action = 0.0
+    df["pv_total_smoothed"] = (
+        ((df["pv_total"] + (smoothing_actions * league_pv_per_action)) / (df["actions"] + smoothing_actions))
+        * df["actions"]
+    )
 
     df["position_group"] = df["position"].apply(position_group)
     return df
@@ -570,7 +584,10 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
             {
                 "Age": "{:.0f}",
                 "Matches": "{:.0f}",
+                "Actions": "{:.0f}",
                 "PV+": "{:.2f}",
+                "Total PV+": "{:.2f}",
+                "PV+ (Smoothed)": "{:.2f}",
                 "Passing": "{:.2f}",
                 "Receiving": "{:.2f}",
                 "Carrying": "{:.2f}",
@@ -659,9 +676,12 @@ with player_tab:
             "player_name",
             "player_age",
             "team_logo",
+            "team_name",
             "position_group",
             "matches",
+            "actions",
             "pv_total",
+            "pv_total_smoothed",
             "pv_passing",
             "pv_receiving",
             "pv_carrying",
@@ -674,9 +694,12 @@ with player_tab:
             "player_name": "Player",
             "player_age": "Age",
             "team_logo": "Team",
+            "team_name": "Team Name",
             "position_group": "Position",
             "matches": "Matches",
-            "pv_total": "PV+",
+            "actions": "Actions",
+            "pv_total": "Total PV+",
+            "pv_total_smoothed": "PV+ (Smoothed)",
             "pv_passing": "Passing",
             "pv_receiving": "Receiving",
             "pv_carrying": "Carrying",
@@ -688,7 +711,7 @@ with player_tab:
     st.dataframe(
         style_rankings_table(
             display_df,
-            numeric_columns=["PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+            numeric_columns=["Total PV+", "PV+ (Smoothed)", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
         ),
         use_container_width=True,
         hide_index=True,
@@ -696,9 +719,12 @@ with player_tab:
         column_config={
             "Rank": st.column_config.NumberColumn("Rank", format="%d"),
             "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
+            "Team Name": st.column_config.TextColumn("Team Name", width="medium"),
             "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
-            "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
+            "Actions": st.column_config.NumberColumn("Actions", format="%d"),
+            "Total PV+": st.column_config.NumberColumn("Total PV+", format="%.2f"),
+            "PV+ (Smoothed)": st.column_config.NumberColumn("PV+ (Smoothed)", format="%.2f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
             "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
             "Carrying": st.column_config.NumberColumn("Carrying", format="%.2f"),
@@ -727,6 +753,7 @@ with team_tab:
                 [
                     "rank",
                     "team_logo",
+                    "team_name",
                     "matches",
                     "pv_total",
                     "pv_passing",
@@ -739,6 +766,7 @@ with team_tab:
                 columns={
                     "rank": "Rank",
                     "team_logo": "Team",
+                    "team_name": "Team Name",
                     "matches": "Matches",
                     "pv_total": "PV+",
                     "pv_passing": "Passing",
@@ -760,6 +788,7 @@ with team_tab:
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", format="%d"),
                     "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
+                    "Team Name": st.column_config.TextColumn("Team Name", width="medium"),
                     "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                     "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
                     "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
@@ -787,6 +816,7 @@ with team_tab:
                 [
                     "rank",
                     "team_logo",
+                    "team_name",
                     "matches",
                     "pv_total",
                     "pv_passing",
@@ -799,6 +829,7 @@ with team_tab:
                 columns={
                     "rank": "Rank",
                     "team_logo": "Team",
+                    "team_name": "Team Name",
                     "matches": "Matches",
                     "pv_total": "PV+ Against",
                     "pv_passing": "Passing Against",
@@ -827,6 +858,7 @@ with team_tab:
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", format="%d"),
                     "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
+                    "Team Name": st.column_config.TextColumn("Team Name", width="medium"),
                     "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                     "PV+ Against": st.column_config.NumberColumn("PV+ Against", format="%.2f"),
                     "Passing Against": st.column_config.NumberColumn("Passing Against", format="%.2f"),
