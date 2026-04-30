@@ -60,8 +60,6 @@ TEAM_LOGO_IDS = {
     "Vancouver": "11134",
 }
 
-MIN_PLAYER_ACTIONS = 100
-
 
 @dataclass(frozen=True)
 class DbConfig:
@@ -618,7 +616,8 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 df = df[df["position_group"] != "GK"].copy()
-df = df[df["actions"] >= MIN_PLAYER_ACTIONS].copy()
+league_avg_actions = int(round(df["actions"].mean())) if len(df) else 0
+df = df[df["actions"] >= league_avg_actions].copy()
 df = add_team_logo_column(df)
 team_df = add_team_logo_column(team_df)
 team_against_df = add_team_logo_column(team_against_df)
@@ -643,8 +642,8 @@ with player_tab:
         with filter_cols[4]:
             min_actions = st.number_input(
                 "Minimum actions",
-                min_value=MIN_PLAYER_ACTIONS,
-                value=MIN_PLAYER_ACTIONS,
+                min_value=league_avg_actions,
+                value=league_avg_actions,
                 step=25,
                 key="player_actions_filter",
             )
@@ -668,7 +667,7 @@ with player_tab:
     st.markdown(
         f"""
         <div class="filter-note">
-            Players with fewer than <strong>{MIN_PLAYER_ACTIONS}</strong> actions are excluded. Top 10% performers for each PV+ category are highlighted blue.
+            Players with fewer than the league-average action threshold (<strong>{league_avg_actions}</strong>) are excluded. Top 10% performers for each PV+ category are highlighted blue.
         </div>
         """,
         unsafe_allow_html=True,
