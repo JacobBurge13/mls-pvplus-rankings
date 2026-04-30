@@ -592,6 +592,7 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
                 "Age": "{:.0f}",
                 "Matches": "{:.0f}",
                 "Actions": "{:.0f}",
+                "Impact Score": "{:.2f}",
                 "PV+": "{:.2f}",
                 "Total PV+": "{:.2f}",
                 "Performance Score": "{:.2f}",
@@ -612,6 +613,13 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
     )
 
 
+def zscore(series: pd.Series) -> pd.Series:
+    std = series.std(ddof=0)
+    if pd.isna(std) or std == 0:
+        return pd.Series(0.0, index=series.index)
+    return (series - series.mean()) / std
+
+
 inject_styles()
 
 st.markdown(
@@ -628,6 +636,11 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 df = df[df["position_group"] != "GK"].copy()
+df["impact_score"] = (
+    0.55 * zscore(df["pv_per_action"])
+    + 0.30 * zscore(np.log1p(df["actions"]))
+    + 0.15 * zscore(np.log1p(df["matches"]))
+)
 df = add_team_logo_column(df)
 team_df = add_team_logo_column(team_df)
 team_against_df = add_team_logo_column(team_against_df)
@@ -671,7 +684,7 @@ with player_tab:
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
     filtered_df = filtered_df[filtered_df["actions"] >= min_actions]
-    filtered_df = filtered_df.sort_values("performance_score", ascending=False).reset_index(drop=True)
+    filtered_df = filtered_df.sort_values("impact_score", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
     st.markdown(
@@ -692,6 +705,7 @@ with player_tab:
             "position_group",
             "matches",
             "actions",
+            "impact_score",
             "performance_score",
             "pv_total",
             "pv_passing",
@@ -709,6 +723,7 @@ with player_tab:
             "position_group": "Position",
             "matches": "Matches",
             "actions": "Actions",
+            "impact_score": "Impact Score",
             "performance_score": "Performance Score",
             "pv_total": "Total PV+",
             "pv_passing": "Passing",
@@ -722,7 +737,7 @@ with player_tab:
     st.dataframe(
         style_rankings_table(
             display_df,
-            numeric_columns=["Performance Score", "Total PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+            numeric_columns=["Impact Score", "Performance Score", "Total PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
         ),
         use_container_width=True,
         hide_index=True,
@@ -733,6 +748,11 @@ with player_tab:
             "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "Actions": st.column_config.NumberColumn("Actions", format="%d"),
+            "Impact Score": st.column_config.NumberColumn(
+                "Impact Score",
+                format="%.2f",
+                help="0.55*z(PV+/action) + 0.30*z(log(actions)) + 0.15*z(log(matches)).",
+            ),
             "Performance Score": st.column_config.NumberColumn(
                 "Performance Score",
                 format="%.2f",
