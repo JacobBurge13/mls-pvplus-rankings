@@ -670,7 +670,6 @@ with player_tab:
             "rank",
             "player_name",
             "player_age",
-            "team_logo",
             "team_name",
             "position_group",
             "matches",
@@ -688,8 +687,7 @@ with player_tab:
             "rank": "Rank",
             "player_name": "Player",
             "player_age": "Age",
-            "team_logo": "Team",
-            "team_name": "Team Name",
+            "team_name": "Team",
             "position_group": "Position",
             "matches": "Matches",
             "actions": "Actions",
@@ -713,8 +711,7 @@ with player_tab:
         height=780,
         column_config={
             "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-            "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
-            "Team Name": st.column_config.TextColumn("Team Name", width="medium"),
+            "Team": st.column_config.TextColumn("Team", width="medium"),
             "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
             "Actions": st.column_config.NumberColumn("Actions", format="%d"),
@@ -747,7 +744,6 @@ with team_tab:
             team_display_df = filtered_team_df[
                 [
                     "rank",
-                    "team_logo",
                     "team_name",
                     "matches",
                     "pv_total",
@@ -760,8 +756,7 @@ with team_tab:
             ].rename(
                 columns={
                     "rank": "Rank",
-                    "team_logo": "Team",
-                    "team_name": "Team Name",
+                    "team_name": "Team",
                     "matches": "Matches",
                     "pv_total": "PV+",
                     "pv_passing": "Passing",
@@ -782,8 +777,7 @@ with team_tab:
                 height=780,
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-                    "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
-                    "Team Name": st.column_config.TextColumn("Team Name", width="medium"),
+                    "Team": st.column_config.TextColumn("Team", width="medium"),
                     "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                     "PV+": st.column_config.NumberColumn("PV+", format="%.2f"),
                     "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
@@ -810,7 +804,6 @@ with team_tab:
             against_display_df = against_df[
                 [
                     "rank",
-                    "team_logo",
                     "team_name",
                     "matches",
                     "pv_total",
@@ -823,8 +816,7 @@ with team_tab:
             ].rename(
                 columns={
                     "rank": "Rank",
-                    "team_logo": "Team",
-                    "team_name": "Team Name",
+                    "team_name": "Team",
                     "matches": "Matches",
                     "pv_total": "PV+ Against",
                     "pv_passing": "Passing Against",
@@ -852,8 +844,7 @@ with team_tab:
                 height=780,
                 column_config={
                     "Rank": st.column_config.NumberColumn("Rank", format="%d"),
-                    "Team": st.column_config.ImageColumn("Team", help="Club logo", width="small"),
-                    "Team Name": st.column_config.TextColumn("Team Name", width="medium"),
+                    "Team": st.column_config.TextColumn("Team", width="medium"),
                     "Matches": st.column_config.NumberColumn("Matches", format="%d"),
                     "PV+ Against": st.column_config.NumberColumn("PV+ Against", format="%.2f"),
                     "Passing Against": st.column_config.NumberColumn("Passing Against", format="%.2f"),
