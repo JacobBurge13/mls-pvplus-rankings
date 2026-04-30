@@ -3,6 +3,7 @@ from __future__ import annotations
 import os
 from dataclasses import dataclass
 from pathlib import Path
+import numpy as np
 import pandas as pd
 import psycopg2
 import streamlit as st
