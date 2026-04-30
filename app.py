@@ -671,7 +671,7 @@ with player_tab:
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
     filtered_df = filtered_df[filtered_df["actions"] >= min_actions]
-    filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
+    filtered_df = filtered_df.sort_values("performance_score", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
     st.markdown(
@@ -692,8 +692,8 @@ with player_tab:
             "position_group",
             "matches",
             "actions",
-            "pv_total",
             "performance_score",
+            "pv_total",
             "pv_passing",
             "pv_receiving",
             "pv_carrying",
@@ -709,8 +709,8 @@ with player_tab:
             "position_group": "Position",
             "matches": "Matches",
             "actions": "Actions",
-            "pv_total": "Total PV+",
             "performance_score": "Performance Score",
+            "pv_total": "Total PV+",
             "pv_passing": "Passing",
             "pv_receiving": "Receiving",
             "pv_carrying": "Carrying",
