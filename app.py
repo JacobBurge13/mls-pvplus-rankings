@@ -539,20 +539,33 @@ def load_player_data() -> pd.DataFrame:
         df["pv_total"] / df["actions"],
         0.0,
     )
-    # Volume-aware performer metric:
-    # - Shrinks noisy small samples toward league rate
-    # - Rewards sustained outperformance over larger action totals
-    prior_actions = 300.0
-    total_actions = float(df["actions"].sum())
-    league_rate = float(df["pv_total"].sum()) / total_actions if total_actions > 0 else 0.0
-    df["stabilized_pv_per_action"] = np.where(
-        (df["actions"] + prior_actions) > 0,
-        (df["pv_total"] + prior_actions * league_rate) / (df["actions"] + prior_actions),
-        league_rate,
-    )
-    df["performance_score"] = (df["stabilized_pv_per_action"] - league_rate) * df["actions"]
-
     df["position_group"] = df["position"].apply(position_group)
+    # Position-aware, volume-aware performer metric:
+    # - Uses a separate baseline rate by position group (DEF/MID/FWD)
+    # - Uses different stabilization strengths per position
+    # - Rewards sustained outperformance at each player's position
+    position_priors = {
+        "DEF": 400.0,
+        "MID": 350.0,
+        "FWD": 300.0,
+    }
+    default_prior = 350.0
+    df["position_prior_actions"] = df["position_group"].map(position_priors).fillna(default_prior)
+
+    pos_actions = df.groupby("position_group")["actions"].transform("sum").astype(float)
+    pos_pv_total = df.groupby("position_group")["pv_total"].transform("sum").astype(float)
+    df["position_baseline_rate"] = np.where(pos_actions > 0, pos_pv_total / pos_actions, 0.0)
+
+    df["stabilized_pv_per_action"] = np.where(
+        (df["actions"] + df["position_prior_actions"]) > 0,
+        (df["pv_total"] + (df["position_prior_actions"] * df["position_baseline_rate"]))
+        / (df["actions"] + df["position_prior_actions"]),
+        df["position_baseline_rate"],
+    )
+    df["performance_score"] = (
+        (df["stabilized_pv_per_action"] - df["position_baseline_rate"]) * df["actions"]
+    )
+
     return df
 
 
@@ -736,7 +749,7 @@ with player_tab:
             "Performance Score": st.column_config.NumberColumn(
                 "Performance Score",
                 format="%.2f",
-                help="Volume-aware metric: stabilized PV+/action relative to league average, scaled by total actions.",
+                help="Position-aware metric: stabilized PV+/action vs position baseline (DEF/MID/FWD), scaled by actions.",
             ),
             "Total PV+": st.column_config.NumberColumn("Total PV+", format="%.2f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
