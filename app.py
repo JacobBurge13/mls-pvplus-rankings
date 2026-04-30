@@ -534,6 +534,11 @@ def load_player_data() -> pd.DataFrame:
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
 
+    df["pv_per_90"] = np.where(
+        df["minutes_played"] > 0,
+        (df["pv_total"] / df["minutes_played"]) * 90.0,
+        0.0,
+    )
     df["pv_per_action"] = np.where(
         df["actions"] > 0,
         df["pv_total"] / df["actions"],
@@ -592,10 +597,10 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
                 "Age": "{:.0f}",
                 "Matches": "{:.0f}",
                 "Actions": "{:.0f}",
-                "Impact Score": "{:.2f}",
+                "Minutes": "{:.0f}",
+                "PV+ Per 90": "{:.2f}",
                 "PV+": "{:.2f}",
                 "Total PV+": "{:.2f}",
-                "Performance Score": "{:.2f}",
                 "Passing": "{:.2f}",
                 "Receiving": "{:.2f}",
                 "Carrying": "{:.2f}",
@@ -611,13 +616,6 @@ def style_rankings_table(df: pd.DataFrame, numeric_columns: list[str]) -> pd.io.
             na_rep="",
         )
     )
-
-
-def zscore(series: pd.Series) -> pd.Series:
-    std = series.std(ddof=0)
-    if pd.isna(std) or std == 0:
-        return pd.Series(0.0, index=series.index)
-    return (series - series.mean()) / std
 
 
 inject_styles()
@@ -636,11 +634,6 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 df = df[df["position_group"] != "GK"].copy()
-df["impact_score"] = (
-    0.55 * zscore(df["pv_per_action"])
-    + 0.30 * zscore(np.log1p(df["actions"]))
-    + 0.15 * zscore(np.log1p(df["matches"]))
-)
 df = add_team_logo_column(df)
 team_df = add_team_logo_column(team_df)
 team_against_df = add_team_logo_column(team_against_df)
@@ -684,7 +677,7 @@ with player_tab:
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
     filtered_df = filtered_df[filtered_df["actions"] >= min_actions]
-    filtered_df = filtered_df.sort_values("impact_score", ascending=False).reset_index(drop=True)
+    filtered_df = filtered_df.sort_values("pv_per_90", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
     st.markdown(
@@ -704,9 +697,9 @@ with player_tab:
             "team_name",
             "position_group",
             "matches",
+            "minutes_played",
             "actions",
-            "impact_score",
-            "performance_score",
+            "pv_per_90",
             "pv_total",
             "pv_passing",
             "pv_receiving",
@@ -722,9 +715,9 @@ with player_tab:
             "team_name": "Team",
             "position_group": "Position",
             "matches": "Matches",
+            "minutes_played": "Minutes",
             "actions": "Actions",
-            "impact_score": "Impact Score",
-            "performance_score": "Performance Score",
+            "pv_per_90": "PV+ Per 90",
             "pv_total": "Total PV+",
             "pv_passing": "Passing",
             "pv_receiving": "Receiving",
@@ -737,7 +730,7 @@ with player_tab:
     st.dataframe(
         style_rankings_table(
             display_df,
-            numeric_columns=["Impact Score", "Performance Score", "Total PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
+            numeric_columns=["PV+ Per 90", "Total PV+", "Passing", "Receiving", "Carrying", "Shooting", "Defending"],
         ),
         use_container_width=True,
         hide_index=True,
@@ -747,17 +740,9 @@ with player_tab:
             "Team": st.column_config.TextColumn("Team", width="medium"),
             "Age": st.column_config.NumberColumn("Age", format="%d"),
             "Matches": st.column_config.NumberColumn("Matches", format="%d"),
+            "Minutes": st.column_config.NumberColumn("Minutes", format="%d"),
             "Actions": st.column_config.NumberColumn("Actions", format="%d"),
-            "Impact Score": st.column_config.NumberColumn(
-                "Impact Score",
-                format="%.2f",
-                help="0.55*z(PV+/action) + 0.30*z(log(actions)) + 0.15*z(log(matches)).",
-            ),
-            "Performance Score": st.column_config.NumberColumn(
-                "Performance Score",
-                format="%.2f",
-                help="Volume-aware metric: stabilized PV+/action relative to league average, scaled by total actions.",
-            ),
+            "PV+ Per 90": st.column_config.NumberColumn("PV+ Per 90", format="%.2f"),
             "Total PV+": st.column_config.NumberColumn("Total PV+", format="%.2f"),
             "Passing": st.column_config.NumberColumn("Passing", format="%.2f"),
             "Receiving": st.column_config.NumberColumn("Receiving", format="%.2f"),
