@@ -60,6 +60,8 @@ TEAM_LOGO_IDS = {
     "Vancouver": "11134",
 }
 
+MIN_PLAYER_ACTIONS = 100
+
 
 @dataclass(frozen=True)
 class DbConfig:
@@ -616,6 +618,7 @@ except Exception as exc:
     st.error(f"Could not load data from Supabase: {exc}")
     st.stop()
 df = df[df["position_group"] != "GK"].copy()
+df = df[df["actions"] >= MIN_PLAYER_ACTIONS].copy()
 df = add_team_logo_column(df)
 team_df = add_team_logo_column(team_df)
 team_against_df = add_team_logo_column(team_against_df)
@@ -627,7 +630,7 @@ with player_tab:
     default_max_age = 40
 
     with st.container():
-        filter_cols = st.columns([1.0, 1.0, 0.8, 0.9, 0.75])
+        filter_cols = st.columns([1.0, 1.0, 0.8, 0.9, 0.85])
 
         with filter_cols[0]:
             team_filter = st.selectbox("Team", options=team_options, key="player_team_filter")
@@ -638,7 +641,13 @@ with player_tab:
         with filter_cols[3]:
             position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
         with filter_cols[4]:
-            min_matches = st.number_input("Minimum matches", min_value=0, value=0, step=1, key="player_matches_filter")
+            min_actions = st.number_input(
+                "Minimum actions",
+                min_value=MIN_PLAYER_ACTIONS,
+                value=MIN_PLAYER_ACTIONS,
+                step=25,
+                key="player_actions_filter",
+            )
 
     filtered_df = df.copy()
     if team_filter != "All Teams":
@@ -652,14 +661,14 @@ with player_tab:
     ]
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
-    filtered_df = filtered_df[filtered_df["matches"] >= min_matches]
+    filtered_df = filtered_df[filtered_df["actions"] >= min_actions]
     filtered_df = filtered_df.sort_values("pv_total", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
     st.markdown(
-        """
+        f"""
         <div class="filter-note">
-            Top 10% performers for each PV+ category are highlighted blue.
+            Players with fewer than <strong>{MIN_PLAYER_ACTIONS}</strong> actions are excluded. Top 10% performers for each PV+ category are highlighted blue.
         </div>
         """,
         unsafe_allow_html=True,
