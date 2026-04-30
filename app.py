@@ -656,12 +656,12 @@ with player_tab:
         with filter_cols[3]:
             position_filter = st.selectbox("Position", options=position_options, key="player_position_filter")
         with filter_cols[4]:
-            min_actions = st.number_input(
-                "Minimum actions",
+            min_minutes = st.number_input(
+                "Minimum minutes",
                 min_value=0,
                 value=0,
-                step=25,
-                key="player_actions_filter",
+                step=90,
+                key="player_minutes_filter",
             )
 
     filtered_df = df.copy()
@@ -676,7 +676,7 @@ with player_tab:
     ]
     if position_filter != "All Positions":
         filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
-    filtered_df = filtered_df[filtered_df["actions"] >= min_actions]
+    filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
     filtered_df = filtered_df.sort_values("pv_per_90", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
 
