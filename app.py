@@ -227,6 +227,52 @@ def position_group(position: str) -> str:
         return "FWD"
     return "MID"
 
+CUSTOM_POSITION_ORDER = [
+    "Center Back",
+    "Outside Back",
+    "Outside Midfielder",
+    "Winger",
+    "Central Defensive Midfielder",
+    "Central Midfielder",
+    "Central Attacking Midfielder",
+    "Striker",
+]
+
+
+def map_custom_position(position: str) -> str:
+    pos = (position or "").upper().strip()
+
+    # Defensive line
+    if any(t in pos for t in ["DC", "CB"]):
+        return "Center Back"
+    if any(t in pos for t in ["DL", "DR", "LWB", "RWB", "LB", "RB"]):
+        return "Outside Back"
+
+    # Midfield bands
+    if any(t in pos for t in ["DMC", "CDM"]):
+        return "Central Defensive Midfielder"
+    if any(t in pos for t in ["AMC", "CAM"]):
+        return "Central Attacking Midfielder"
+    if any(t in pos for t in ["MC", "CM"]):
+        return "Central Midfielder"
+    if any(t in pos for t in ["ML", "MR"]):
+        return "Outside Midfielder"
+    if any(t in pos for t in ["AML", "AMR", "LW", "RW", "WING"]):
+        return "Winger"
+
+    # Front line
+    if any(t in pos for t in ["FW", "ST", "CF", "STRIK"]):
+        return "Striker"
+
+    # Fallbacks so "Sub" and unknowns don't become filter options.
+    if "DEF" in pos or "BACK" in pos:
+        return "Center Back"
+    if "MID" in pos:
+        return "Central Midfielder"
+    if "FORW" in pos or "ATT" in pos:
+        return "Striker"
+    return "Central Midfielder"
+
 
 @st.cache_data(ttl=900, show_spinner=False)
 def load_team_data() -> pd.DataFrame:
@@ -674,6 +720,7 @@ def load_player_data() -> pd.DataFrame:
     df["performance_score"] = (df["stabilized_pv_per_action"] - league_rate) * df["actions"]
 
     df["position_group"] = df["position"].apply(position_group)
+    df["position_custom"] = df["position"].apply(map_custom_position)
 
     # Replace displayed defensive score with defender-context standardized value for defenders.
     # (Non-defenders retain their raw defensive PV+ value.)
@@ -770,14 +817,7 @@ player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
 
 with player_tab:
     team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
-    detailed_positions = sorted(
-        [
-            str(p).strip()
-            for p in df["position"].dropna().unique().tolist()
-            if str(p).strip()
-        ]
-    )
-    position_options = ["All Positions"] + detailed_positions
+    position_options = ["All Positions"] + CUSTOM_POSITION_ORDER
     default_max_age = 40
 
     with st.container():
@@ -811,7 +851,7 @@ with player_tab:
         filtered_df["player_age"].fillna(999) <= max_age
     ]
     if position_filter != "All Positions":
-        filtered_df = filtered_df[filtered_df["position"] == position_filter]
+        filtered_df = filtered_df[filtered_df["position_custom"] == position_filter]
     filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
     filtered_df = filtered_df.sort_values("pv_per_90", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
@@ -831,7 +871,7 @@ with player_tab:
             "player_name",
             "player_age",
             "team_name",
-            "position",
+            "position_custom",
             "matches",
             "minutes_played",
             "actions",
@@ -849,7 +889,7 @@ with player_tab:
             "player_name": "Player",
             "player_age": "Age",
             "team_name": "Team",
-            "position": "Position",
+            "position_custom": "Position",
             "matches": "Matches",
             "minutes_played": "Minutes",
             "actions": "Actions",
