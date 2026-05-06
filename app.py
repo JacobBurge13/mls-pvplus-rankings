@@ -1066,6 +1066,89 @@ with player_tab:
         },
     )
 
+    st.markdown("### Position Classification Pitch")
+    st.markdown(
+        '<div class="filter-note">Current role assignment shown by each player\'s average event location.</div>',
+        unsafe_allow_html=True,
+    )
+
+    pitch_df = filtered_df.copy()
+    pitch_df = pitch_df[(pitch_df["avg_x"] >= 0) & (pitch_df["avg_y"] >= 0)].copy()
+
+    role_colors = {
+        "Center Back": "#2563eb",
+        "Outside Back": "#06b6d4",
+        "Central Defensive Midfielder": "#14b8a6",
+        "Central Midfielder": "#22c55e",
+        "Central Attacking Midfielder": "#eab308",
+        "Outside Midfielder": "#f97316",
+        "Winger": "#ef4444",
+        "Striker": "#a855f7",
+    }
+
+    fig_pitch, ax_pitch = plt.subplots(figsize=(12, 8), facecolor="#f8fafc")
+    ax_pitch.set_facecolor("#f8fafc")
+
+    # Pitch frame (0-100 normalized coordinates)
+    ax_pitch.plot([0, 100], [0, 0], color="#94a3b8", lw=1.2)
+    ax_pitch.plot([0, 100], [100, 100], color="#94a3b8", lw=1.2)
+    ax_pitch.plot([0, 0], [0, 100], color="#94a3b8", lw=1.2)
+    ax_pitch.plot([100, 100], [0, 100], color="#94a3b8", lw=1.2)
+    ax_pitch.plot([50, 50], [0, 100], color="#cbd5e1", lw=1.0, linestyle="--")
+    center_circle = plt.Circle((50, 50), 12, fill=False, color="#cbd5e1", lw=1.0)
+    ax_pitch.add_patch(center_circle)
+
+    # Penalty boxes (rough normalized approximation)
+    ax_pitch.plot([0, 16], [21, 21], color="#cbd5e1", lw=1.0)
+    ax_pitch.plot([16, 16], [21, 79], color="#cbd5e1", lw=1.0)
+    ax_pitch.plot([16, 0], [79, 79], color="#cbd5e1", lw=1.0)
+    ax_pitch.plot([100, 84], [21, 21], color="#cbd5e1", lw=1.0)
+    ax_pitch.plot([84, 84], [21, 79], color="#cbd5e1", lw=1.0)
+    ax_pitch.plot([84, 100], [79, 79], color="#cbd5e1", lw=1.0)
+
+    for role in CUSTOM_POSITION_ORDER:
+        subset = pitch_df[pitch_df["position_custom"] == role]
+        if len(subset) == 0:
+            continue
+        ax_pitch.scatter(
+            subset["avg_x"],
+            subset["avg_y"],
+            s=85,
+            c=role_colors.get(role, "#334155"),
+            alpha=0.88,
+            edgecolors="white",
+            linewidths=0.8,
+            label=role,
+            zorder=3,
+        )
+
+    # Annotate top players by minutes to keep chart readable.
+    label_df = pitch_df.sort_values("minutes_played", ascending=False).head(35)
+    for _, r in label_df.iterrows():
+        ax_pitch.text(
+            r["avg_x"] + 1.0,
+            r["avg_y"] + 0.6,
+            str(r["player_name"]).split(" ")[-1],
+            fontsize=7.5,
+            color="#1e293b",
+            alpha=0.9,
+            zorder=4,
+        )
+
+    ax_pitch.set_xlim(0, 100)
+    ax_pitch.set_ylim(0, 100)
+    ax_pitch.set_xlabel("Average Action Depth (x)", color="#334155")
+    ax_pitch.set_ylabel("Average Action Width (y)", color="#334155")
+    ax_pitch.grid(False)
+    ax_pitch.legend(
+        loc="upper center",
+        bbox_to_anchor=(0.5, -0.08),
+        ncol=4,
+        frameon=False,
+        fontsize=8,
+    )
+    st.pyplot(fig_pitch, use_container_width=True)
+
 with team_tab:
         teams_for_tab, teams_against_tab = st.tabs(["For", "Against"])
 
