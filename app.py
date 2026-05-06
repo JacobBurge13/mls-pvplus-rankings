@@ -283,7 +283,7 @@ def map_custom_position_from_profile(
     wide = not central
     wide_offset = float(pd.to_numeric(avg_wide_offset, errors="coerce") or 0.0)
     # If a player appears on both flanks, avg_y can look central; width usage catches that.
-    wide_usage = wide_offset >= 18.0
+    wide_usage = wide_offset >= 22.0
 
     pos_upper = (raw_position or "").upper()
 
@@ -308,6 +308,15 @@ def map_custom_position_from_profile(
     # Any player with strong shot-share and reasonably advanced territory is a striker.
     if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
         return "Striker" if central else "Winger"
+
+    # Protect true central players from being pushed wide by mixed wide actions.
+    central_guard = central and (45 <= x <= 68) and (wide_offset < 24.0)
+    if central_guard:
+        if x < 54:
+            return "Central Defensive Midfielder"
+        if x < 64:
+            return "Central Midfielder"
+        return "Central Attacking Midfielder"
 
     # Wide-lane role assignment is primarily depth + defending profile.
     # Deeper and defense-heavy wide players -> Outside Back.
