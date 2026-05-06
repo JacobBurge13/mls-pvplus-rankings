@@ -309,16 +309,28 @@ def map_custom_position_from_profile(
     if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
         return "Striker" if central else "Winger"
 
-    # Protect true central players from being pushed wide by mixed wide actions.
-    central_guard = central and (45 <= x <= 68) and (wide_offset < 24.0)
-    if central_guard:
+    # Width-first rule:
+    # if a player spends a lot of actions in wide channels, classify wide (or CB if deep+defensive).
+    width_heavy = wide_offset >= 20.0
+    if width_heavy:
+        if x < 54 and defending_share >= 0.12:
+            return "Center Back"
+        if x <= 60 and defending_share >= 0.16:
+            return "Outside Back"
+        if x <= 68:
+            return "Outside Midfielder"
+        return "Winger"
+
+    # Central-first rule:
+    # central action profiles should be central midfield roles.
+    if central:
         if x < 54:
             return "Central Defensive Midfielder"
         if x < 64:
             return "Central Midfielder"
         return "Central Attacking Midfielder"
 
-    # Wide-lane role assignment is primarily depth + defending profile.
+    # Non-width-heavy fallback wide assignment
     # Deeper and defense-heavy wide players -> Outside Back.
     if wide or wide_usage:
         if x <= 52 and defending_share >= 0.12:
