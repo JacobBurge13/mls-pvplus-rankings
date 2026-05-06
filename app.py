@@ -295,34 +295,24 @@ def map_custom_position_from_profile(
     if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
         return "Central Forwards" if central_band else "Wide Forwards"
 
-    # 3) Central lanes -> central midfield roles
-    central_lock = central_band and (central_share >= 0.45)
-    if central_lock:
-        if x < 54:
+    # 3) Midfield split rule (explicit):
+    # - central x + central y -> Central Midfielders
+    # - central x + wide y    -> Wide Midfielders
+    # Central-x band on horizontal pitch
+    if 45 <= x <= 70:
+        if central_band:
             return "Central Midfielders"
-        if x < 61:
-            return "Central Midfielders"
-        if x <= 70:
-            return "Central Midfielders"
-        return "Central Forwards"
+        return "Wide Midfielders"
 
-    # 4) Wide lanes -> outside mid / winger / outside back by depth + defending
-    width_heavy = (wide_share >= 0.50) or (wide_offset >= 22.0 and wide_share >= 0.42)
-    if wide_band or width_heavy:
-        if x <= 58 and defending_share >= 0.14:
-            return "Wide Defenders"
-        if x <= 66:
-            return "Wide Midfielders"
-        return "Wide Forwards"
+    # 4) Non-midfield fallback
+    # Wide advanced actions become wide forwards; central advanced actions become central forwards.
+    if x > 70:
+        return "Central Forwards" if central_band else "Wide Forwards"
 
-    # 5) Central fallback
-    if x < 54:
-        return "Central Midfielders"
-    if x < 61:
-        return "Central Midfielders"
-    if x <= 70:
-        return "Central Midfielders"
-    return "Central Forwards"
+    # Deeper fallback
+    if x <= 58 and defending_share >= 0.14:
+        return "Wide Defenders"
+    return "Central Midfielders" if central_band else "Wide Midfielders"
 
 
 @st.cache_data(ttl=900, show_spinner=False)
