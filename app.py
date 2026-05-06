@@ -242,6 +242,8 @@ def map_custom_position_from_profile(
     avg_x: float,
     avg_y: float,
     avg_wide_offset: float,
+    central_action_share: float,
+    wide_action_share: float,
     raw_position: str,
     pv_defending: float,
     pv_shooting: float,
@@ -282,6 +284,8 @@ def map_custom_position_from_profile(
     central = 30 <= y <= 70
     wide = not central
     wide_offset = float(pd.to_numeric(avg_wide_offset, errors="coerce") or 0.0)
+    central_share = float(pd.to_numeric(central_action_share, errors="coerce") or 0.0)
+    wide_share = float(pd.to_numeric(wide_action_share, errors="coerce") or 0.0)
     # If a player appears on both flanks, avg_y can look central; width usage catches that.
     wide_usage = wide_offset >= 22.0
 
@@ -311,7 +315,16 @@ def map_custom_position_from_profile(
 
     # Width-first rule:
     # if a player spends a lot of actions in wide channels, classify wide (or CB if deep+defensive).
-    width_heavy = wide_offset >= 20.0
+    # Width-heavy requires actual wide action concentration, not just average spread.
+    width_heavy = (wide_share >= 0.45) or (wide_offset >= 22.0 and wide_share >= 0.38)
+    # Central guard for players like Rodrigo De Paul: mostly central actions stay central.
+    central_dominant = central_share >= 0.52
+    if central_dominant and central:
+        if x < 54:
+            return "Central Defensive Midfielder"
+        if x < 64:
+            return "Central Midfielder"
+        return "Central Attacking Midfielder"
     if width_heavy:
         if x < 54 and defending_share >= 0.12:
             return "Center Back"
@@ -613,7 +626,9 @@ def load_player_data() -> pd.DataFrame:
             SUM(gplus_defending) AS pv_defending,
             AVG(x) AS avg_x,
             AVG(y) AS avg_y,
-            AVG(ABS(y - 50.0)) AS avg_wide_offset
+            AVG(ABS(y - 50.0)) AS avg_wide_offset,
+            AVG(CASE WHEN y BETWEEN 35 AND 65 THEN 1.0 ELSE 0.0 END) AS central_action_share,
+            AVG(CASE WHEN y < 30 OR y > 70 THEN 1.0 ELSE 0.0 END) AS wide_action_share
         FROM match_events_2026
         GROUP BY player_id, team_id
     )
@@ -634,7 +649,9 @@ def load_player_data() -> pd.DataFrame:
         e.pv_defending,
         e.avg_x,
         e.avg_y,
-        e.avg_wide_offset
+        e.avg_wide_offset,
+        e.central_action_share,
+        e.wide_action_share
     FROM event_agg e
     LEFT JOIN player_lookup p
         ON p.player_id_raw = e.player_id::text
@@ -771,6 +788,8 @@ def load_player_data() -> pd.DataFrame:
         "avg_x",
         "avg_y",
         "avg_wide_offset",
+        "central_action_share",
+        "wide_action_share",
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -821,6 +840,8 @@ def load_player_data() -> pd.DataFrame:
             r.get("avg_x"),
             r.get("avg_y"),
             r.get("avg_wide_offset"),
+            r.get("central_action_share"),
+            r.get("wide_action_share"),
             r.get("position"),
             r.get("pv_defending"),
             r.get("pv_shooting"),
