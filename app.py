@@ -770,7 +770,14 @@ player_tab, team_tab = st.tabs(["Player Rankings", "Team Rankings"])
 
 with player_tab:
     team_options = ["All Teams"] + sorted(df["team_name"].dropna().unique().tolist())
-    position_options = ["All Positions", "DEF", "MID", "FWD"]
+    detailed_positions = sorted(
+        [
+            str(p).strip()
+            for p in df["position"].dropna().unique().tolist()
+            if str(p).strip()
+        ]
+    )
+    position_options = ["All Positions"] + detailed_positions
     default_max_age = 40
 
     with st.container():
@@ -804,7 +811,7 @@ with player_tab:
         filtered_df["player_age"].fillna(999) <= max_age
     ]
     if position_filter != "All Positions":
-        filtered_df = filtered_df[filtered_df["position_group"] == position_filter]
+        filtered_df = filtered_df[filtered_df["position"] == position_filter]
     filtered_df = filtered_df[filtered_df["minutes_played"] >= min_minutes]
     filtered_df = filtered_df.sort_values("pv_per_90", ascending=False).reset_index(drop=True)
     filtered_df["rank"] = range(1, len(filtered_df) + 1)
@@ -824,7 +831,7 @@ with player_tab:
             "player_name",
             "player_age",
             "team_name",
-            "position_group",
+            "position",
             "matches",
             "minutes_played",
             "actions",
@@ -842,7 +849,7 @@ with player_tab:
             "player_name": "Player",
             "player_age": "Age",
             "team_name": "Team",
-            "position_group": "Position",
+            "position": "Position",
             "matches": "Matches",
             "minutes_played": "Minutes",
             "actions": "Actions",
