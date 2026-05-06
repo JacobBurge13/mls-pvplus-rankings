@@ -241,6 +241,7 @@ CUSTOM_POSITION_ORDER = [
 def map_custom_position_from_profile(
     avg_x: float,
     avg_y: float,
+    avg_wide_offset: float,
     raw_position: str,
     pv_defending: float,
     pv_shooting: float,
@@ -280,6 +281,9 @@ def map_custom_position_from_profile(
     # and to reduce over-classification of wide roles.
     central = 30 <= y <= 70
     wide = not central
+    wide_offset = float(pd.to_numeric(avg_wide_offset, errors="coerce") or 0.0)
+    # If a player appears on both flanks, avg_y can look central; width usage catches that.
+    wide_usage = wide_offset >= 18.0
 
     pos_upper = (raw_position or "").upper()
 
@@ -307,7 +311,7 @@ def map_custom_position_from_profile(
 
     # Wide-lane role assignment is primarily depth + defending profile.
     # Deeper and defense-heavy wide players -> Outside Back.
-    if wide:
+    if wide or wide_usage:
         if x <= 52 and defending_share >= 0.12:
             return "Outside Back"
         if x <= 60 and defending_share >= 0.16:
@@ -587,7 +591,8 @@ def load_player_data() -> pd.DataFrame:
             SUM(gplus_shooting) AS pv_shooting,
             SUM(gplus_defending) AS pv_defending,
             AVG(x) AS avg_x,
-            AVG(y) AS avg_y
+            AVG(y) AS avg_y,
+            AVG(ABS(y - 50.0)) AS avg_wide_offset
         FROM match_events_2026
         GROUP BY player_id, team_id
     )
@@ -607,7 +612,8 @@ def load_player_data() -> pd.DataFrame:
         e.pv_shooting,
         e.pv_defending,
         e.avg_x,
-        e.avg_y
+        e.avg_y,
+        e.avg_wide_offset
     FROM event_agg e
     LEFT JOIN player_lookup p
         ON p.player_id_raw = e.player_id::text
@@ -743,6 +749,7 @@ def load_player_data() -> pd.DataFrame:
         "pv_defending",
         "avg_x",
         "avg_y",
+        "avg_wide_offset",
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -792,6 +799,7 @@ def load_player_data() -> pd.DataFrame:
         lambda r: map_custom_position_from_profile(
             r.get("avg_x"),
             r.get("avg_y"),
+            r.get("avg_wide_offset"),
             r.get("position"),
             r.get("pv_defending"),
             r.get("pv_shooting"),
