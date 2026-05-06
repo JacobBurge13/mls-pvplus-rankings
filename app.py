@@ -283,12 +283,9 @@ def map_custom_position_from_profile(
 
     pos_upper = (raw_position or "").upper()
 
-    # Respect clear canonical tags when present.
+    # Keep only strongest canonical anchors; otherwise classify from profile + location.
     if any(t in pos_upper for t in ["DC", "CB"]):
         return "Center Back"
-    # Treat wide-defender tags as outside backs.
-    if any(t in pos_upper for t in ["DL", "DR", "DML", "DMR", "LB", "RB", "LWB", "RWB"]):
-        return "Outside Back"
     if any(t in pos_upper for t in ["FW", "ST", "CF"]):
         return "Striker" if central else "Winger"
 
@@ -308,11 +305,20 @@ def map_custom_position_from_profile(
     if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
         return "Striker" if central else "Winger"
 
-    # Wide players with meaningful defensive profile should be outside backs, not outside mids.
-    if wide and x <= 66 and defending_share >= 0.20:
-        return "Outside Back"
+    # Wide-lane role assignment is primarily depth + defending profile.
+    # Deeper and defense-heavy wide players -> Outside Back.
+    if wide:
+        if x <= 52 and defending_share >= 0.12:
+            return "Outside Back"
+        if x <= 60 and defending_share >= 0.16:
+            return "Outside Back"
+        # Mid-height wide roles -> Outside Midfielder
+        if x <= 66:
+            return "Outside Midfielder"
+        # High wide roles -> Winger
+        return "Winger"
 
-    # Defensive third / build-up zone
+    # Central lanes by depth
     if x < 40:
         return "Center Back" if central else "Outside Back"
 
