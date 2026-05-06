@@ -516,6 +516,105 @@ def load_player_data() -> pd.DataFrame:
     )
     try:
         df = pd.read_sql(query, conn)
+
+        # Build defender-context defensive score inputs at player-match granularity.
+        defender_context_query = """
+        WITH matches_2026 AS (
+            SELECT match_id, home_team_name, away_team_name
+            FROM public.matches
+            WHERE match_date >= DATE '2026-01-01'
+              AND match_date < DATE '2027-01-01'
+        ),
+        match_events_2026 AS (
+            SELECT
+                e.match_id,
+                e.player_id,
+                e.team_id,
+                e.total_mins,
+                COALESCE(e.gplus_passing, 0) AS gplus_passing,
+                COALESCE(e.gplus_receiving, 0) AS gplus_receiving,
+                COALESCE(e.gplus_carrying, 0) AS gplus_carrying,
+                COALESCE(e.gplus_shooting, 0) AS gplus_shooting,
+                COALESCE(e.gplus_defending, 0) AS gplus_defending
+            FROM public.match_event e
+            INNER JOIN matches_2026 m
+                ON m.match_id = e.match_id
+            WHERE e.player_id IS NOT NULL
+              AND e.team_id IS NOT NULL
+        ),
+        team_lookup AS (
+            SELECT DISTINCT ON (regexp_replace(team_id, '_\\(\\d{4}\\)$', ''))
+                regexp_replace(team_id, '_\\(\\d{4}\\)$', '') AS team_id_raw,
+                name AS team_name
+            FROM public.teams
+            ORDER BY regexp_replace(team_id, '_\\(\\d{4}\\)$', ''), (team_id LIKE '%(2026)') DESC, team_id
+        ),
+        player_match AS (
+            SELECT
+                e.player_id,
+                e.match_id,
+                e.team_id,
+                MAX(COALESCE(e.total_mins, 0)) AS match_minutes,
+                SUM(e.gplus_defending) AS pv_defending_match
+            FROM match_events_2026 e
+            GROUP BY e.player_id, e.match_id, e.team_id
+        ),
+        team_match_att_pv AS (
+            SELECT
+                e.match_id,
+                COALESCE(t.team_name, 'Unknown Team') AS team_name,
+                SUM(e.gplus_passing + e.gplus_receiving + e.gplus_carrying + e.gplus_shooting) AS team_att_pv_match
+            FROM match_events_2026 e
+            LEFT JOIN team_lookup t
+                ON t.team_id_raw = e.team_id::text
+            GROUP BY e.match_id, COALESCE(t.team_name, 'Unknown Team')
+        ),
+        player_match_with_names AS (
+            SELECT
+                pm.player_id,
+                pm.match_id,
+                pm.match_minutes,
+                pm.pv_defending_match,
+                COALESCE(t.team_name, 'Unknown Team') AS team_name
+            FROM player_match pm
+            LEFT JOIN team_lookup t
+                ON t.team_id_raw = pm.team_id::text
+        ),
+        player_match_with_opp AS (
+            SELECT
+                pm.player_id,
+                pm.match_id,
+                pm.match_minutes,
+                pm.pv_defending_match,
+                CASE
+                    WHEN pm.team_name = m.home_team_name THEN m.away_team_name
+                    WHEN pm.team_name = m.away_team_name THEN m.home_team_name
+                    ELSE NULL
+                END AS opponent_team_name
+            FROM player_match_with_names pm
+            INNER JOIN matches_2026 m
+                ON m.match_id = pm.match_id
+        ),
+        player_match_context AS (
+            SELECT
+                pm.player_id,
+                pm.match_id,
+                pm.match_minutes,
+                pm.pv_defending_match,
+                COALESCE(ta.team_att_pv_match, 0) AS opponent_att_pv_match
+            FROM player_match_with_opp pm
+            LEFT JOIN team_match_att_pv ta
+                ON ta.match_id = pm.match_id
+               AND ta.team_name = pm.opponent_team_name
+        )
+        SELECT
+            player_id,
+            SUM(pv_defending_match) AS pv_defending_raw,
+            SUM(opponent_att_pv_match * LEAST(GREATEST(match_minutes, 0), 90) / 90.0) AS opponent_att_pv_faced
+        FROM player_match_context
+        GROUP BY player_id;
+        """
+        defender_context_df = pd.read_sql(defender_context_query, conn)
     finally:
         conn.close()
 
@@ -533,6 +632,23 @@ def load_player_data() -> pd.DataFrame:
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
+
+    if len(defender_context_df) > 0:
+        defender_context_df["player_id"] = defender_context_df["player_id"].astype(str)
+        for col in ["pv_defending_raw", "opponent_att_pv_faced"]:
+            defender_context_df[col] = pd.to_numeric(defender_context_df[col], errors="coerce").fillna(0.0)
+
+        df["player_id"] = df["player_id"].astype(str)
+        df = df.merge(defender_context_df, on="player_id", how="left")
+    else:
+        df["pv_defending_raw"] = df["pv_defending"]
+        df["opponent_att_pv_faced"] = 0.0
+
+    df["pv_defending_raw"] = pd.to_numeric(df["pv_defending_raw"], errors="coerce").fillna(df["pv_defending"])
+    df["opponent_att_pv_faced"] = pd.to_numeric(df["opponent_att_pv_faced"], errors="coerce").fillna(0.0)
+
+    eps = 0.05
+    df["def_adj_ratio"] = df["pv_defending_raw"] / df["opponent_att_pv_faced"].clip(lower=eps)
 
     df["pv_per_90"] = np.where(
         df["minutes_played"] > 0,
@@ -558,6 +674,19 @@ def load_player_data() -> pd.DataFrame:
     df["performance_score"] = (df["stabilized_pv_per_action"] - league_rate) * df["actions"]
 
     df["position_group"] = df["position"].apply(position_group)
+
+    # Replace displayed defensive score with defender-context standardized value for defenders.
+    # (Non-defenders retain their raw defensive PV+ value.)
+    defenders_mask = df["position_group"] == "DEF"
+    if defenders_mask.any():
+        def_ratio = pd.to_numeric(df.loc[defenders_mask, "def_adj_ratio"], errors="coerce").fillna(0.0)
+        ratio_std = def_ratio.std(ddof=0)
+        if ratio_std > 0 and not np.isnan(ratio_std):
+            z_def = (def_ratio - def_ratio.mean()) / ratio_std
+        else:
+            z_def = pd.Series(np.zeros(len(def_ratio)), index=def_ratio.index)
+        df.loc[defenders_mask, "pv_defending"] = z_def
+
     return df
 
 
