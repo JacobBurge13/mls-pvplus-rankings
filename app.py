@@ -238,40 +238,52 @@ CUSTOM_POSITION_ORDER = [
     "Striker",
 ]
 
+def map_custom_position_from_coords(avg_x: float, avg_y: float, raw_position: str) -> str:
+    """
+    Assign custom role primarily from average event coordinates.
+    Coordinate assumptions:
+      - x increases from own goal to opponent goal
+      - y near middle is central; low/high are wide channels
+    """
+    x = pd.to_numeric(avg_x, errors="coerce")
+    y = pd.to_numeric(avg_y, errors="coerce")
 
-def map_custom_position(position: str) -> str:
-    pos = (position or "").upper().strip()
-
-    # Defensive line
-    if any(t in pos for t in ["DC", "CB"]):
-        return "Center Back"
-    if any(t in pos for t in ["DL", "DR", "LWB", "RWB", "LB", "RB"]):
-        return "Outside Back"
-
-    # Midfield bands
-    if any(t in pos for t in ["DMC", "CDM"]):
-        return "Central Defensive Midfielder"
-    if any(t in pos for t in ["AMC", "CAM"]):
-        return "Central Attacking Midfielder"
-    if any(t in pos for t in ["MC", "CM"]):
+    if pd.isna(x) or pd.isna(y):
+        # Coordinate fallback if data is missing
+        pos = (raw_position or "").upper()
+        if any(t in pos for t in ["DC", "CB"]):
+            return "Center Back"
+        if any(t in pos for t in ["DL", "DR", "LB", "RB", "LWB", "RWB"]):
+            return "Outside Back"
+        if any(t in pos for t in ["DMC", "CDM"]):
+            return "Central Defensive Midfielder"
+        if any(t in pos for t in ["AMC", "CAM"]):
+            return "Central Attacking Midfielder"
+        if any(t in pos for t in ["FW", "ST", "CF"]):
+            return "Striker"
+        if any(t in pos for t in ["AMR", "AML", "RW", "LW", "WING"]):
+            return "Winger"
+        if any(t in pos for t in ["ML", "MR"]):
+            return "Outside Midfielder"
         return "Central Midfielder"
-    if any(t in pos for t in ["ML", "MR"]):
-        return "Outside Midfielder"
-    if any(t in pos for t in ["AML", "AMR", "LW", "RW", "WING"]):
-        return "Winger"
 
-    # Front line
-    if any(t in pos for t in ["FW", "ST", "CF", "STRIK"]):
-        return "Striker"
+    central = 35 <= y <= 65
+    wide = not central
 
-    # Fallbacks so "Sub" and unknowns don't become filter options.
-    if "DEF" in pos or "BACK" in pos:
-        return "Center Back"
-    if "MID" in pos:
-        return "Central Midfielder"
-    if "FORW" in pos or "ATT" in pos:
-        return "Striker"
-    return "Central Midfielder"
+    # Defensive third / build-up zone
+    if x < 42:
+        return "Center Back" if central else "Outside Back"
+
+    # Deep-to-middle band
+    if x < 56:
+        return "Central Defensive Midfielder" if central else "Outside Midfielder"
+
+    # Advanced midfield band
+    if x < 72:
+        return "Central Attacking Midfielder" if central else "Winger"
+
+    # Final third
+    return "Striker" if central else "Winger"
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -470,6 +482,8 @@ def load_player_data() -> pd.DataFrame:
             e.player_id,
             e.team_id,
             e.total_mins,
+            COALESCE(e.x, 50) AS x,
+            COALESCE(e.y, 50) AS y,
             COALESCE(e.gplus, 0) AS gplus,
             COALESCE(e.gplus_passing, 0) AS gplus_passing,
             COALESCE(e.gplus_receiving, 0) AS gplus_receiving,
@@ -523,7 +537,9 @@ def load_player_data() -> pd.DataFrame:
             SUM(gplus_receiving) AS pv_receiving,
             SUM(gplus_carrying) AS pv_carrying,
             SUM(gplus_shooting) AS pv_shooting,
-            SUM(gplus_defending) AS pv_defending
+            SUM(gplus_defending) AS pv_defending,
+            AVG(x) AS avg_x,
+            AVG(y) AS avg_y
         FROM match_events_2026
         GROUP BY player_id, team_id
     )
@@ -541,7 +557,9 @@ def load_player_data() -> pd.DataFrame:
         e.pv_receiving,
         e.pv_carrying,
         e.pv_shooting,
-        e.pv_defending
+        e.pv_defending,
+        e.avg_x,
+        e.avg_y
     FROM event_agg e
     LEFT JOIN player_lookup p
         ON p.player_id_raw = e.player_id::text
@@ -675,6 +693,8 @@ def load_player_data() -> pd.DataFrame:
         "pv_carrying",
         "pv_shooting",
         "pv_defending",
+        "avg_x",
+        "avg_y",
     ]
     for col in numeric_cols:
         df[col] = pd.to_numeric(df[col], errors="coerce").fillna(0)
@@ -720,7 +740,10 @@ def load_player_data() -> pd.DataFrame:
     df["performance_score"] = (df["stabilized_pv_per_action"] - league_rate) * df["actions"]
 
     df["position_group"] = df["position"].apply(position_group)
-    df["position_custom"] = df["position"].apply(map_custom_position)
+    df["position_custom"] = df.apply(
+        lambda r: map_custom_position_from_coords(r.get("avg_x"), r.get("avg_y"), r.get("position")),
+        axis=1,
+    )
 
     # Replace displayed defensive score with defender-context standardized value for defenders.
     # (Non-defenders retain their raw defensive PV+ value.)
