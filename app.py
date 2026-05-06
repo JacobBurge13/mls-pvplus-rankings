@@ -267,22 +267,30 @@ def map_custom_position_from_coords(avg_x: float, avg_y: float, raw_position: st
             return "Outside Midfielder"
         return "Central Midfielder"
 
-    central = 35 <= y <= 65
+    # Wider central lane to avoid true CBs getting classified as outside backs
+    # and to reduce over-classification of wide roles.
+    central = 30 <= y <= 70
     wide = not central
 
+    # Respect clear canonical tags when present (helps cases like Palacios at CB).
+    if any(t in (raw_position or "").upper() for t in ["DC", "CB"]):
+        return "Center Back"
+    if any(t in (raw_position or "").upper() for t in ["FW", "ST", "CF"]):
+        return "Striker" if central else "Winger"
+
     # Defensive third / build-up zone
-    if x < 42:
+    if x < 40:
         return "Center Back" if central else "Outside Back"
 
     # Deep-to-middle band
-    if x < 56:
+    if x < 54:
         return "Central Defensive Midfielder" if central else "Outside Midfielder"
 
     # Advanced midfield band
-    if x < 72:
+    if x < 64:
         return "Central Attacking Midfielder" if central else "Winger"
 
-    # Final third
+    # Final third (lowered threshold so strikers aren't mislabeled as CAM)
     return "Striker" if central else "Winger"
 
 
