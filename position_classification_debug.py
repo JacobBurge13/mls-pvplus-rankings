@@ -85,11 +85,11 @@ def map_custom_position_from_profile(
         return "Central Forwards" if central_band else "Wide Forwards"
 
     # 3) Midfield split rule (explicit):
-    # - central x + central y -> Central Midfielders
-    # - central x + wide y    -> Wide Midfielders
-    if 45 <= x <= 70:
-        if central_band:
-            return "Central Midfielders"
+    # - Central Midfielders: x in [45, 58] and y in [30, 70]
+    # - Wide Midfielders: central-depth band with wide y
+    if 45 <= x <= 58 and 30 <= y <= 70:
+        return "Central Midfielders"
+    if 45 <= x <= 66 and (y < 30 or y > 70):
         return "Wide Midfielders"
 
     # 4) Non-midfield fallback
