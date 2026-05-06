@@ -238,7 +238,15 @@ CUSTOM_POSITION_ORDER = [
     "Striker",
 ]
 
-def map_custom_position_from_coords(avg_x: float, avg_y: float, raw_position: str) -> str:
+def map_custom_position_from_profile(
+    avg_x: float,
+    avg_y: float,
+    raw_position: str,
+    pv_shooting: float,
+    pv_passing: float,
+    pv_receiving: float,
+    pv_carrying: float,
+) -> str:
     """
     Assign custom role primarily from average event coordinates.
     Coordinate assumptions:
@@ -272,10 +280,25 @@ def map_custom_position_from_coords(avg_x: float, avg_y: float, raw_position: st
     central = 30 <= y <= 70
     wide = not central
 
-    # Respect clear canonical tags when present (helps cases like Palacios at CB).
-    if any(t in (raw_position or "").upper() for t in ["DC", "CB"]):
+    pos_upper = (raw_position or "").upper()
+
+    # Respect clear canonical tags when present.
+    if any(t in pos_upper for t in ["DC", "CB"]):
         return "Center Back"
-    if any(t in (raw_position or "").upper() for t in ["FW", "ST", "CF"]):
+    if any(t in pos_upper for t in ["FW", "ST", "CF"]):
+        return "Striker" if central else "Winger"
+
+    # Profile-based striker detection for dropping forwards:
+    # high shooting contribution and advanced average x.
+    shoot = float(pd.to_numeric(pv_shooting, errors="coerce") or 0.0)
+    passv = float(pd.to_numeric(pv_passing, errors="coerce") or 0.0)
+    recv = float(pd.to_numeric(pv_receiving, errors="coerce") or 0.0)
+    carry = float(pd.to_numeric(pv_carrying, errors="coerce") or 0.0)
+    att_total = max(1e-9, shoot + passv + recv + carry)
+    shooting_share = shoot / att_total
+
+    # Any player with strong shot-share and reasonably advanced territory is a striker.
+    if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
         return "Striker" if central else "Winger"
 
     # Defensive third / build-up zone
@@ -290,7 +313,7 @@ def map_custom_position_from_coords(avg_x: float, avg_y: float, raw_position: st
     if x < 64:
         return "Central Attacking Midfielder" if central else "Winger"
 
-    # Final third (lowered threshold so strikers aren't mislabeled as CAM)
+    # Final third
     return "Striker" if central else "Winger"
 
 
@@ -749,7 +772,15 @@ def load_player_data() -> pd.DataFrame:
 
     df["position_group"] = df["position"].apply(position_group)
     df["position_custom"] = df.apply(
-        lambda r: map_custom_position_from_coords(r.get("avg_x"), r.get("avg_y"), r.get("position")),
+        lambda r: map_custom_position_from_profile(
+            r.get("avg_x"),
+            r.get("avg_y"),
+            r.get("position"),
+            r.get("pv_shooting"),
+            r.get("pv_passing"),
+            r.get("pv_receiving"),
+            r.get("pv_carrying"),
+        ),
         axis=1,
     )
 
