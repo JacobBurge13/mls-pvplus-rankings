@@ -228,14 +228,14 @@ def position_group(position: str) -> str:
     return "MID"
 
 CUSTOM_POSITION_ORDER = [
-    "Center Back",
-    "Outside Back",
-    "Outside Midfielder",
-    "Winger",
-    "Central Defensive Midfielder",
-    "Central Midfielder",
-    "Central Attacking Midfielder",
-    "Striker",
+    "Central Defenders",
+    "Wide Defenders",
+    "Wide Midfielders",
+    "Wide Forwards",
+    "Central Midfielders",
+    "Central Midfielders",
+    "Central Midfielders",
+    "Central Forwards",
 ]
 
 def map_custom_position_from_profile(
@@ -252,53 +252,24 @@ def map_custom_position_from_profile(
     pv_carrying: float,
 ) -> str:
     """
-    Assign custom role primarily from average event coordinates.
-    Coordinate assumptions:
-      - x increases from own goal to opponent goal
-      - y near middle is central; low/high are wide channels
+    Horizontal pitch assumption: goal is to the right.
+    x: depth (left=deeper), y: width (middle=center lane).
     """
     x = pd.to_numeric(avg_x, errors="coerce")
     y = pd.to_numeric(avg_y, errors="coerce")
 
     if pd.isna(x) or pd.isna(y):
-        # Coordinate fallback if data is missing
-        pos = (raw_position or "").upper()
-        if any(t in pos for t in ["DC", "CB"]):
-            return "Center Back"
-        if any(t in pos for t in ["DL", "DR", "LB", "RB", "LWB", "RWB"]):
-            return "Outside Back"
-        if any(t in pos for t in ["DMC", "CDM"]):
-            return "Central Defensive Midfielder"
-        if any(t in pos for t in ["AMC", "CAM"]):
-            return "Central Attacking Midfielder"
-        if any(t in pos for t in ["FW", "ST", "CF"]):
-            return "Striker"
-        if any(t in pos for t in ["AMR", "AML", "RW", "LW", "WING"]):
-            return "Winger"
-        if any(t in pos for t in ["ML", "MR"]):
-            return "Outside Midfielder"
-        return "Central Midfielder"
+        return "Central Midfielders"
 
-    # Wider central lane to avoid true CBs getting classified as outside backs
-    # and to reduce over-classification of wide roles.
-    central = 30 <= y <= 70
-    wide = not central
+    central_band = 35 <= y <= 65
+    wide_band = not central_band
+
     wide_offset = float(pd.to_numeric(avg_wide_offset, errors="coerce") or 0.0)
     central_share = float(pd.to_numeric(central_action_share, errors="coerce") or 0.0)
     wide_share = float(pd.to_numeric(wide_action_share, errors="coerce") or 0.0)
-    # If a player appears on both flanks, avg_y can look central; width usage catches that.
-    wide_usage = wide_offset >= 22.0
 
     pos_upper = (raw_position or "").upper()
 
-    # Keep only strongest canonical anchors; otherwise classify from profile + location.
-    if any(t in pos_upper for t in ["DC", "CB"]):
-        return "Center Back"
-    if any(t in pos_upper for t in ["FW", "ST", "CF"]):
-        return "Striker" if central else "Winger"
-
-    # Profile-based striker detection for dropping forwards:
-    # high shooting contribution and advanced average x.
     shoot = float(pd.to_numeric(pv_shooting, errors="coerce") or 0.0)
     defend = float(pd.to_numeric(pv_defending, errors="coerce") or 0.0)
     passv = float(pd.to_numeric(pv_passing, errors="coerce") or 0.0)
@@ -309,75 +280,49 @@ def map_custom_position_from_profile(
     shooting_share = shoot / att_total
     defending_share = max(defend, 0.0) / total_with_def
 
-    # Any player with strong shot-share and reasonably advanced territory is a striker.
+    # 1) Defensive line split exactly by your rule
+    # Center backs: left/deep x and central y
+    # Outside backs: left/deep x and wide y
+    if x < 45:
+        # Expanded CB width band: y in [30, 70] counts as center back.
+        if 30 <= y <= 70:
+            return "Central Defenders"
+        return "Wide Defenders"
+
+    # 2) Strong striker anchors
+    if any(t in pos_upper for t in ["FW", "ST", "CF"]):
+        return "Central Forwards" if central_band else "Wide Forwards"
     if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
-        return "Striker" if central else "Winger"
+        return "Central Forwards" if central_band else "Wide Forwards"
 
-    # Width-first rule:
-    # if a player spends a lot of actions in wide channels, classify wide (or CB if deep+defensive).
-    # Hard central lock: if both average depth and width are central, classify centrally.
-    if (45 <= x <= 68) and (35 <= y <= 65):
+    # 3) Central lanes -> central midfield roles
+    central_lock = central_band and (central_share >= 0.45)
+    if central_lock:
         if x < 54:
-            return "Central Defensive Midfielder"
-        if x < 64:
-            return "Central Midfielder"
-        return "Central Attacking Midfielder"
+            return "Central Midfielders"
+        if x < 61:
+            return "Central Midfielders"
+        if x <= 70:
+            return "Central Midfielders"
+        return "Central Forwards"
 
-    # Width-heavy requires actual wide action concentration, not just average spread.
-    width_heavy = (wide_share >= 0.56) or (wide_offset >= 25.0 and wide_share >= 0.50)
-    # Secondary central guard for players still mostly central by action profile.
-    central_dominant = central_share >= 0.56
-    if central_dominant and central:
-        if x < 54:
-            return "Central Defensive Midfielder"
-        if x < 64:
-            return "Central Midfielder"
-        return "Central Attacking Midfielder"
-    if width_heavy:
-        if x < 54 and defending_share >= 0.12:
-            return "Center Back"
-        if x <= 60 and defending_share >= 0.16:
-            return "Outside Back"
-        if x <= 64 and wide_share >= 0.65 and (y < 35 or y > 65):
-            return "Outside Midfielder"
-        return "Winger"
+    # 4) Wide lanes -> outside mid / winger / outside back by depth + defending
+    width_heavy = (wide_share >= 0.50) or (wide_offset >= 22.0 and wide_share >= 0.42)
+    if wide_band or width_heavy:
+        if x <= 58 and defending_share >= 0.14:
+            return "Wide Defenders"
+        if x <= 66:
+            return "Wide Midfielders"
+        return "Wide Forwards"
 
-    # Central-first rule:
-    # central action profiles should be central midfield roles.
-    if central:
-        if x < 54:
-            return "Central Defensive Midfielder"
-        if x < 64:
-            return "Central Midfielder"
-        return "Central Attacking Midfielder"
-
-    # Non-width-heavy fallback wide assignment
-    # Deeper and defense-heavy wide players -> Outside Back.
-    if wide or wide_usage:
-        if x <= 52 and defending_share >= 0.12:
-            return "Outside Back"
-        if x <= 60 and defending_share >= 0.16:
-            return "Outside Back"
-        # Mid-height wide roles -> Outside Midfielder
-        if x <= 63 and wide_share >= 0.65 and (y < 35 or y > 65):
-            return "Outside Midfielder"
-        # High wide roles -> Winger
-        return "Winger"
-
-    # Central lanes by depth
-    if x < 40:
-        return "Center Back" if central else "Outside Back"
-
-    # Deep-to-middle band
+    # 5) Central fallback
     if x < 54:
-        return "Central Defensive Midfielder" if central else "Outside Midfielder"
-
-    # Advanced midfield band
-    if x < 64:
-        return "Central Attacking Midfielder" if central else "Winger"
-
-    # Final third
-    return "Striker" if central else "Winger"
+        return "Central Midfielders"
+    if x < 61:
+        return "Central Midfielders"
+    if x <= 70:
+        return "Central Midfielders"
+    return "Central Forwards"
 
 
 @st.cache_data(ttl=900, show_spinner=False)
@@ -1065,89 +1010,6 @@ with player_tab:
             "Defending": st.column_config.NumberColumn("Defending", format="%.2f"),
         },
     )
-
-    st.markdown("### Position Classification Pitch")
-    st.markdown(
-        '<div class="filter-note">Current role assignment shown by each player\'s average event location.</div>',
-        unsafe_allow_html=True,
-    )
-
-    pitch_df = filtered_df.copy()
-    pitch_df = pitch_df[(pitch_df["avg_x"] >= 0) & (pitch_df["avg_y"] >= 0)].copy()
-
-    role_colors = {
-        "Center Back": "#2563eb",
-        "Outside Back": "#06b6d4",
-        "Central Defensive Midfielder": "#14b8a6",
-        "Central Midfielder": "#22c55e",
-        "Central Attacking Midfielder": "#eab308",
-        "Outside Midfielder": "#f97316",
-        "Winger": "#ef4444",
-        "Striker": "#a855f7",
-    }
-
-    fig_pitch, ax_pitch = plt.subplots(figsize=(12, 8), facecolor="#f8fafc")
-    ax_pitch.set_facecolor("#f8fafc")
-
-    # Pitch frame (0-100 normalized coordinates)
-    ax_pitch.plot([0, 100], [0, 0], color="#94a3b8", lw=1.2)
-    ax_pitch.plot([0, 100], [100, 100], color="#94a3b8", lw=1.2)
-    ax_pitch.plot([0, 0], [0, 100], color="#94a3b8", lw=1.2)
-    ax_pitch.plot([100, 100], [0, 100], color="#94a3b8", lw=1.2)
-    ax_pitch.plot([50, 50], [0, 100], color="#cbd5e1", lw=1.0, linestyle="--")
-    center_circle = plt.Circle((50, 50), 12, fill=False, color="#cbd5e1", lw=1.0)
-    ax_pitch.add_patch(center_circle)
-
-    # Penalty boxes (rough normalized approximation)
-    ax_pitch.plot([0, 16], [21, 21], color="#cbd5e1", lw=1.0)
-    ax_pitch.plot([16, 16], [21, 79], color="#cbd5e1", lw=1.0)
-    ax_pitch.plot([16, 0], [79, 79], color="#cbd5e1", lw=1.0)
-    ax_pitch.plot([100, 84], [21, 21], color="#cbd5e1", lw=1.0)
-    ax_pitch.plot([84, 84], [21, 79], color="#cbd5e1", lw=1.0)
-    ax_pitch.plot([84, 100], [79, 79], color="#cbd5e1", lw=1.0)
-
-    for role in CUSTOM_POSITION_ORDER:
-        subset = pitch_df[pitch_df["position_custom"] == role]
-        if len(subset) == 0:
-            continue
-        ax_pitch.scatter(
-            subset["avg_x"],
-            subset["avg_y"],
-            s=85,
-            c=role_colors.get(role, "#334155"),
-            alpha=0.88,
-            edgecolors="white",
-            linewidths=0.8,
-            label=role,
-            zorder=3,
-        )
-
-    # Annotate top players by minutes to keep chart readable.
-    label_df = pitch_df.sort_values("minutes_played", ascending=False).head(35)
-    for _, r in label_df.iterrows():
-        ax_pitch.text(
-            r["avg_x"] + 1.0,
-            r["avg_y"] + 0.6,
-            str(r["player_name"]).split(" ")[-1],
-            fontsize=7.5,
-            color="#1e293b",
-            alpha=0.9,
-            zorder=4,
-        )
-
-    ax_pitch.set_xlim(0, 100)
-    ax_pitch.set_ylim(0, 100)
-    ax_pitch.set_xlabel("Average Action Depth (x)", color="#334155")
-    ax_pitch.set_ylabel("Average Action Width (y)", color="#334155")
-    ax_pitch.grid(False)
-    ax_pitch.legend(
-        loc="upper center",
-        bbox_to_anchor=(0.5, -0.08),
-        ncol=4,
-        frameon=False,
-        fontsize=8,
-    )
-    st.pyplot(fig_pitch, use_container_width=True)
 
 with team_tab:
         teams_for_tab, teams_against_tab = st.tabs(["For", "Against"])
