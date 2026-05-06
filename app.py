@@ -242,6 +242,7 @@ def map_custom_position_from_profile(
     avg_x: float,
     avg_y: float,
     raw_position: str,
+    pv_defending: float,
     pv_shooting: float,
     pv_passing: float,
     pv_receiving: float,
@@ -285,21 +286,31 @@ def map_custom_position_from_profile(
     # Respect clear canonical tags when present.
     if any(t in pos_upper for t in ["DC", "CB"]):
         return "Center Back"
+    # Treat wide-defender tags as outside backs.
+    if any(t in pos_upper for t in ["DL", "DR", "DML", "DMR", "LB", "RB", "LWB", "RWB"]):
+        return "Outside Back"
     if any(t in pos_upper for t in ["FW", "ST", "CF"]):
         return "Striker" if central else "Winger"
 
     # Profile-based striker detection for dropping forwards:
     # high shooting contribution and advanced average x.
     shoot = float(pd.to_numeric(pv_shooting, errors="coerce") or 0.0)
+    defend = float(pd.to_numeric(pv_defending, errors="coerce") or 0.0)
     passv = float(pd.to_numeric(pv_passing, errors="coerce") or 0.0)
     recv = float(pd.to_numeric(pv_receiving, errors="coerce") or 0.0)
     carry = float(pd.to_numeric(pv_carrying, errors="coerce") or 0.0)
     att_total = max(1e-9, shoot + passv + recv + carry)
+    total_with_def = max(1e-9, shoot + passv + recv + carry + max(defend, 0.0))
     shooting_share = shoot / att_total
+    defending_share = max(defend, 0.0) / total_with_def
 
     # Any player with strong shot-share and reasonably advanced territory is a striker.
     if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
         return "Striker" if central else "Winger"
+
+    # Wide players with meaningful defensive profile should be outside backs, not outside mids.
+    if wide and x <= 66 and defending_share >= 0.20:
+        return "Outside Back"
 
     # Defensive third / build-up zone
     if x < 40:
@@ -776,6 +787,7 @@ def load_player_data() -> pd.DataFrame:
             r.get("avg_x"),
             r.get("avg_y"),
             r.get("position"),
+            r.get("pv_defending"),
             r.get("pv_shooting"),
             r.get("pv_passing"),
             r.get("pv_receiving"),
