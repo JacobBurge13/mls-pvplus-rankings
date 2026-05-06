@@ -230,13 +230,13 @@ def position_group(position: str) -> str:
 CUSTOM_POSITION_ORDER = [
     "Central Defenders",
     "Wide Defenders",
+    "Central Midfielders",
     "Wide Midfielders",
     "Wide Forwards",
-    "Central Midfielders",
-    "Central Midfielders",
-    "Central Midfielders",
     "Central Forwards",
 ]
+
+PLAYER_DATA_SCHEMA_VERSION = "roles-v2-6cats"
 
 def map_custom_position_from_profile(
     avg_x: float,
@@ -507,7 +507,7 @@ def load_team_against_data() -> pd.DataFrame:
 
 
 @st.cache_data(ttl=900, show_spinner=False)
-def load_player_data() -> pd.DataFrame:
+def load_player_data(schema_version: str = PLAYER_DATA_SCHEMA_VERSION) -> pd.DataFrame:
     query = """
     WITH matches_2026 AS (
         SELECT match_id
