@@ -316,7 +316,7 @@ def map_custom_position_from_profile(
     # Width-first rule:
     # if a player spends a lot of actions in wide channels, classify wide (or CB if deep+defensive).
     # Width-heavy requires actual wide action concentration, not just average spread.
-    width_heavy = (wide_share >= 0.45) or (wide_offset >= 22.0 and wide_share >= 0.38)
+    width_heavy = (wide_share >= 0.52) or (wide_offset >= 24.0 and wide_share >= 0.44)
     # Central guard for players like Rodrigo De Paul: mostly central actions stay central.
     central_dominant = central_share >= 0.52
     if central_dominant and central:
@@ -330,7 +330,7 @@ def map_custom_position_from_profile(
             return "Center Back"
         if x <= 60 and defending_share >= 0.16:
             return "Outside Back"
-        if x <= 68:
+        if x <= 64 and wide_share >= 0.58:
             return "Outside Midfielder"
         return "Winger"
 
@@ -351,7 +351,7 @@ def map_custom_position_from_profile(
         if x <= 60 and defending_share >= 0.16:
             return "Outside Back"
         # Mid-height wide roles -> Outside Midfielder
-        if x <= 66:
+        if x <= 63 and wide_share >= 0.60:
             return "Outside Midfielder"
         # High wide roles -> Winger
         return "Winger"
