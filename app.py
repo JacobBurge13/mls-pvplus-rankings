@@ -236,7 +236,7 @@ CUSTOM_POSITION_ORDER = [
     "Central Forwards",
 ]
 
-PLAYER_DATA_SCHEMA_VERSION = "roles-v2-6cats"
+PLAYER_DATA_SCHEMA_VERSION = "roles-v2-6cats-cm-expanded"
 
 def map_custom_position_from_profile(
     avg_x: float,
@@ -299,7 +299,7 @@ def map_custom_position_from_profile(
     # - central x + central y -> Central Midfielders
     # - central x + wide y    -> Wide Midfielders
     # Central-x band on horizontal pitch
-    if 45 <= x <= 70:
+    if 42 <= x <= 64:
         if central_band:
             return "Central Midfielders"
         return "Wide Midfielders"

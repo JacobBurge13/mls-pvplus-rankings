@@ -87,9 +87,9 @@ def map_custom_position_from_profile(
     # 3) Midfield split rule (explicit):
     # - Central Midfielders: x in [45, 58] and y in [30, 70]
     # - Wide Midfielders: central-depth band with wide y
-    if 45 <= x <= 58 and 30 <= y <= 70:
+    if 42 <= x <= 64 and 30 <= y <= 70:
         return "Central Midfielders"
-    if 45 <= x <= 66 and (y < 30 or y > 70):
+    if 42 <= x <= 66 and (y < 30 or y > 70):
         return "Wide Midfielders"
 
     # 4) Non-midfield fallback
@@ -220,9 +220,7 @@ def main():
     role_colors = {
         "Central Defenders": "#2563eb",
         "Wide Defenders": "#06b6d4",
-        "Central Midfielders": "#14b8a6",
         "Central Midfielders": "#22c55e",
-        "Central Midfielders": "#eab308",
         "Wide Midfielders": "#f97316",
         "Wide Forwards": "#ef4444",
         "Central Forwards": "#a855f7",
