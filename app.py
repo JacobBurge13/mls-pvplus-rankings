@@ -236,7 +236,8 @@ CUSTOM_POSITION_ORDER = [
     "Central Forwards",
 ]
 
-PLAYER_DATA_SCHEMA_VERSION = "roles-v2-6cats-cm-expanded"
+PLAYER_DATA_SCHEMA_VERSION = "roles-v2-6cats-cm-expanded-v2"
+POSITION_RULES_VERSION = "CM x42-64 y30-70"
 
 def map_custom_position_from_profile(
     avg_x: float,
@@ -874,6 +875,7 @@ st.markdown(
     '<div class="front-subtitle">Possession Value Added</div>',
     unsafe_allow_html=True,
 )
+st.caption(f"Position rules: {POSITION_RULES_VERSION}")
 
 try:
     df = load_player_data()
