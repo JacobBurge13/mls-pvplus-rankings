@@ -269,16 +269,12 @@ def map_custom_position_from_profile(
     central_share = float(pd.to_numeric(central_action_share, errors="coerce") or 0.0)
     wide_share = float(pd.to_numeric(wide_action_share, errors="coerce") or 0.0)
 
-    pos_upper = (raw_position or "").upper()
-
-    shoot = float(pd.to_numeric(pv_shooting, errors="coerce") or 0.0)
     defend = float(pd.to_numeric(pv_defending, errors="coerce") or 0.0)
+    shoot = float(pd.to_numeric(pv_shooting, errors="coerce") or 0.0)
     passv = float(pd.to_numeric(pv_passing, errors="coerce") or 0.0)
     recv = float(pd.to_numeric(pv_receiving, errors="coerce") or 0.0)
     carry = float(pd.to_numeric(pv_carrying, errors="coerce") or 0.0)
-    att_total = max(1e-9, shoot + passv + recv + carry)
     total_with_def = max(1e-9, shoot + passv + recv + carry + max(defend, 0.0))
-    shooting_share = shoot / att_total
     defending_share = max(defend, 0.0) / total_with_def
 
     # 1) Defensive line split
@@ -291,23 +287,17 @@ def map_custom_position_from_profile(
     if x <= 60 and (y < 25 or y > 75):
         return "Wide Defenders"
 
-    # 2) Strong striker anchors
-    if any(t in pos_upper for t in ["FW", "ST", "CF"]):
-        return "Central Forwards" if central_band else "Wide Forwards"
-    if (x >= 56 and shooting_share >= 0.30) or (x >= 50 and shoot >= 1.0):
-        return "Central Forwards" if central_band else "Wide Forwards"
-
-    # 3) Midfield split rule (explicit):
+    # 2) Midfield split rule (explicit):
     # - central x + central y -> Central Midfielders
     # - central x + wide y    -> Wide Midfielders
     # Central-x band on horizontal pitch
-    if 42 <= x <= 64:
+    if 42 <= x <= 60:
         if midfield_central_band:
             return "Central Midfielders"
         return "Wide Midfielders"
 
-    # 4) Non-midfield fallback
-    # Wide advanced actions become wide forwards; central advanced actions become central forwards.
+    # 3) Non-midfield fallback
+    # Forward vs central-mid split is positioning-based only.
     if x > 70:
         return "Central Forwards" if central_band else "Wide Forwards"
 
