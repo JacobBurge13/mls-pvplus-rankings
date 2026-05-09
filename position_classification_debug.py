@@ -13,6 +13,7 @@ DB_CONFIG = {
 }
 
 OUT = Path("artifacts/position_classification_debug_pitch.png")
+OUT_ALL_NAMES = Path("artifacts/position_classification_debug_pitch_all_names.png")
 OUT.parent.mkdir(parents=True, exist_ok=True)
 
 
@@ -69,13 +70,14 @@ def map_custom_position_from_profile(
     shooting_share = shoot / att_total
     defending_share = max(defend, 0.0) / total_with_def
 
-    # 1) Defensive line split exactly by your rule
+    # 1) Defensive line split
     # Center backs: left/deep x and central y
-    # Outside backs: left/deep x and wide y
+    # Wide defenders: left/deep x and wide y, and can extend to x <= 60
     if x < 45:
-        # Expanded CB width band: y in [30, 70] counts as center back.
-        if 30 <= y <= 70:
+        if 25 <= y <= 75:
             return "Central Defenders"
+        return "Wide Defenders"
+    if x <= 60 and (y < 25 or y > 75):
         return "Wide Defenders"
 
     # 2) Strong striker anchors
@@ -252,6 +254,34 @@ def main():
     plt.tight_layout()
     fig.savefig(OUT, dpi=240, bbox_inches="tight")
     print(f"\nSaved debug pitch: {OUT.resolve()}")
+
+    # Full-label debug image: every player's full name shown.
+    fig2, ax2 = plt.subplots(figsize=(24, 16), facecolor="#f8fafc")
+    ax2.set_facecolor("#f8fafc")
+    ax2.plot([0, 100], [0, 0], color="#94a3b8", lw=1.2)
+    ax2.plot([0, 100], [100, 100], color="#94a3b8", lw=1.2)
+    ax2.plot([0, 0], [0, 100], color="#94a3b8", lw=1.2)
+    ax2.plot([100, 100], [0, 100], color="#94a3b8", lw=1.2)
+    ax2.plot([50, 50], [0, 100], color="#cbd5e1", lw=1.0, linestyle="--")
+    for role, g in df.groupby("position_custom"):
+        ax2.scatter(
+            g["avg_x"], g["avg_y"], s=75, alpha=0.9,
+            c=role_colors.get(role, "#334155"), edgecolors="white", linewidths=0.6, label=role
+        )
+    for _, r in df.iterrows():
+        name = str(r.get("player_name", "")).strip()
+        if name:
+            ax2.text(r["avg_x"] + 0.5, r["avg_y"] + 0.35, name, fontsize=6.2, color="#0f172a")
+    ax2.set_xlim(0, 100)
+    ax2.set_ylim(0, 100)
+    ax2.set_xlabel("Average Action Depth (x)")
+    ax2.set_ylabel("Average Action Width (y)")
+    ax2.set_title("MLS 2026 Position Classification Debug Pitch (All Player Names)", fontsize=14, fontweight="bold")
+    ax2.grid(False)
+    ax2.legend(loc="upper center", bbox_to_anchor=(0.5, -0.08), ncol=4, frameon=False, fontsize=8)
+    plt.tight_layout()
+    fig2.savefig(OUT_ALL_NAMES, dpi=300, bbox_inches="tight")
+    print(f"Saved full-label debug pitch: {OUT_ALL_NAMES.resolve()}")
 
 
 if __name__ == "__main__":

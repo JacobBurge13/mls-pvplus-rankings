@@ -281,13 +281,14 @@ def map_custom_position_from_profile(
     shooting_share = shoot / att_total
     defending_share = max(defend, 0.0) / total_with_def
 
-    # 1) Defensive line split exactly by your rule
+    # 1) Defensive line split
     # Center backs: left/deep x and central y
-    # Outside backs: left/deep x and wide y
+    # Wide defenders: left/deep x and wide y, and can extend to x <= 60
     if x < 45:
-        # Expanded CB width band: y in [30, 70] counts as center back.
-        if 30 <= y <= 70:
+        if 25 <= y <= 75:
             return "Central Defenders"
+        return "Wide Defenders"
+    if x <= 60 and (y < 25 or y > 75):
         return "Wide Defenders"
 
     # 2) Strong striker anchors
