@@ -290,7 +290,7 @@ def map_custom_position_from_profile(
     # - central x + central y -> Central Midfielders
     # - central x + wide y    -> Wide Attackers
     # Central-x band on horizontal pitch
-    if 42 <= x <= 60:
+    if 42 <= x <= 54:
         if midfield_central_band:
             return "Central Midfielders"
         return "Wide Attackers"
@@ -868,7 +868,6 @@ st.markdown(
     '<div class="front-subtitle">Possession Value Added</div>',
     unsafe_allow_html=True,
 )
-st.caption(f"Position rules: {POSITION_RULES_VERSION}")
 
 try:
     df = load_player_data()

@@ -79,7 +79,7 @@ def map_custom_position_from_profile(
     # 2) Midfield split rule (explicit):
     # - Central Midfielders: x in [45, 58] and y in [30, 70]
     # - Wide Attackers: central-depth band with wide y
-    if 42 <= x <= 60 and midfield_central_band:
+    if 42 <= x <= 54 and midfield_central_band:
         return "Central Midfielders"
     if 42 <= x <= 66 and (y < 30 or y > 70):
         return "Wide Attackers"
