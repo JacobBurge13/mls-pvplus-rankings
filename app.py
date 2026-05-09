@@ -235,7 +235,7 @@ CUSTOM_POSITION_ORDER = [
     "Central Forwards",
 ]
 
-PLAYER_DATA_SCHEMA_VERSION = "roles-v2-6cats-cm-expanded-v2"
+PLAYER_DATA_SCHEMA_VERSION = "roles-v3-wide-attackers-nonoverlap"
 POSITION_RULES_VERSION = "CM x42-64 y30-70"
 
 def map_custom_position_from_profile(
@@ -787,6 +787,10 @@ def load_player_data(schema_version: str = PLAYER_DATA_SCHEMA_VERSION) -> pd.Dat
             r.get("pv_carrying"),
         ),
         axis=1,
+    )
+    # Safety normalization for any legacy labels that may leak in from stale deploys/caches.
+    df["position_custom"] = df["position_custom"].replace(
+        {"Wide Midfielders": "Wide Attackers", "Wide Forwards": "Wide Attackers"}
     )
 
     # Replace displayed defensive score with defender-context standardized value for defenders.
