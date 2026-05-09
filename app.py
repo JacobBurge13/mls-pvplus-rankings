@@ -263,7 +263,7 @@ def map_custom_position_from_profile(
         return "Central Midfielders"
 
     central_band = 35 <= y <= 65
-    wide_band = not central_band
+    midfield_central_band = 30 <= y <= 70
 
     wide_offset = float(pd.to_numeric(avg_wide_offset, errors="coerce") or 0.0)
     central_share = float(pd.to_numeric(central_action_share, errors="coerce") or 0.0)
@@ -301,7 +301,7 @@ def map_custom_position_from_profile(
     # - central x + wide y    -> Wide Midfielders
     # Central-x band on horizontal pitch
     if 42 <= x <= 64:
-        if central_band:
+        if midfield_central_band:
             return "Central Midfielders"
         return "Wide Midfielders"
 
