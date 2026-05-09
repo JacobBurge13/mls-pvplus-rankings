@@ -231,8 +231,7 @@ CUSTOM_POSITION_ORDER = [
     "Central Defenders",
     "Wide Defenders",
     "Central Midfielders",
-    "Wide Midfielders",
-    "Wide Forwards",
+    "Wide Attackers",
     "Central Forwards",
 ]
 
@@ -289,22 +288,25 @@ def map_custom_position_from_profile(
 
     # 2) Midfield split rule (explicit):
     # - central x + central y -> Central Midfielders
-    # - central x + wide y    -> Wide Midfielders
+    # - central x + wide y    -> Wide Attackers
     # Central-x band on horizontal pitch
     if 42 <= x <= 60:
         if midfield_central_band:
             return "Central Midfielders"
-        return "Wide Midfielders"
+        return "Wide Attackers"
 
-    # 3) Non-midfield fallback
-    # Forward vs central-mid split is positioning-based only.
-    if x > 70:
-        return "Central Forwards" if central_band else "Wide Forwards"
+    # 3) Forward zone (position-only):
+    # central forwards: y 35-75 and x >= 55
+    # wide attackers: x >= 55 outside central-forward y band
+    if x >= 55:
+        if 35 <= y <= 75:
+            return "Central Forwards"
+        return "Wide Attackers"
 
     # Deeper fallback
     if x <= 58 and defending_share >= 0.14:
         return "Wide Defenders"
-    return "Central Midfielders" if central_band else "Wide Midfielders"
+    return "Central Midfielders" if central_band else "Wide Attackers"
 
 
 @st.cache_data(ttl=900, show_spinner=False)
